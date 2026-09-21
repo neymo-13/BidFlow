@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: auction_postgres
+    environment:
+      POSTGRES_DB: auction_db          # ชื่อ Database
+      POSTGRES_USER: postgres          # Username
+      POSTGRES_PASSWORD: mysecretpassword # Password
+    ports:
+      - "5432:5432"                    # <--- ช่องทางเชื่อมต่อ! (พอร์ตนอก : พอร์ตใน)
