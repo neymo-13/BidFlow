@@ -3,6 +3,8 @@ package com.bidflow.backend.entity;
 import com.bidflow.backend.enums.AuctionStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -66,9 +68,11 @@ public class AuctionItem {
     @Column(name = "version")
     private Long version;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    @CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private OffsetDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
-    private OffsetDateTime updatedAt;
+	@UpdateTimestamp
+	@Column(name = "updated_at", nullable = false)
+	private OffsetDateTime updatedAt;
 }

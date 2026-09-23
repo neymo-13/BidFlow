@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.OffsetDateTime;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 @Entity
 @Table(name = "notifications")
 @Getter
@@ -38,6 +40,8 @@ public class Notification {
     @Builder.Default
     private boolean isRead = false;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private OffsetDateTime createdAt;
+	@CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private OffsetDateTime createdAt;
+
 }

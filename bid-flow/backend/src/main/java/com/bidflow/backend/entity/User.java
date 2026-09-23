@@ -5,6 +5,9 @@ import lombok.*;                       // @Getter @Setter etc.
 import java.math.BigDecimal;           // type สำหรับเงิน (ไม่ใช้ double!)
 import java.time.OffsetDateTime;       // type สำหรับ timestamp + timezone
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 @Entity                                // บอก Hibernate ว่า "นี่คือ table"
 @Table(name = "users")                 // ชื่อ table จริงใน DB (เพราะ class = User แต่ table = users)
 @Getter                                // Lombok: สร้าง getter ให้ทุก field อัตโนมัติ
@@ -35,10 +38,12 @@ public class User {
 	@Column(name = "wallet_balance", nullable = false, precision = 15, scale = 2) // หลักรวม, ทศนิยม (เท่ากับ DECIMAL(15,2))
 	private BigDecimal walletBalance;
 
-	@Column(name = "created_at", insertable = false, updatable = false) // ห้าม Java เขียน | ห้าม Java แก้ = ให้ DB default จัดการ
+	@CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
 	private OffsetDateTime createdAt;
 
-	@Column(name = "updated_at", insertable = false, updatable = false)
+	@UpdateTimestamp
+	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
 
 	/*
