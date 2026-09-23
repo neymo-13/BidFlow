@@ -157,12 +157,47 @@ CREATE INDEX idx_notifications_user_read
 CREATE UNIQUE INDEX uniq_primary_image_per_item
 	ON item_images(auction_item_id) WHERE is_primary = TRUE;
 
+-- =========================================
+-- wallet_transactions
+-- =========================================
+
 CREATE TABLE wallet_transactions (
     id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id),
-    amount DECIMAL(15,2) NOT NULL,  -- + ฝาก, - ถอน/ตัด
-    balance_after DECIMAL(15,2) NOT NULL,
-    type VARCHAR(30) NOT NULL CHECK (type IN ('DEPOSIT','WITHDRAW','BID_HOLD','BID_RELEASE','WIN_PAYMENT','SELLER_PAYOUT')),
-    reference_id BIGINT, -- auction_item_id หรือ bid_id
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+
+    user_id BIGINT NOT NULL
+        REFERENCES users(id) ON DELETE CASCADE,
+
+    -- จำนวนเงิน: บวก = เข้า, ลบ = ออก
+    amount DECIMAL(15, 2) NOT NULL
+        CHECK (amount <> 0),
+
+    -- ยอดเงินคงเหลือ "หลัง" transaction นี้ (snapshot)
+    balance_after DECIMAL(15, 2) NOT NULL
+        CHECK (balance_after >= 0),
+
+    type VARCHAR(30) NOT NULL
+        CHECK (type IN (
+            'DEPOSIT',        -- ฝากเงิน
+            'WITHDRAW',       -- ถอนเงิน
+            'BID_HOLD',       -- กันเงินเมื่อ bid
+            'BID_RELEASE',    -- คืนเงินเมื่อถูก outbid
+            'AUCTION_WIN',    -- ตัดเงินจริงเมื่อชนะ
+            'SELLER_PAYOUT'   -- ผู้ขายได้เงิน
+        )),
+
+    -- อ้างอิงว่ามาจากอะไร (auction_item_id, bid_id, etc.)
+    reference_type VARCHAR(30),        -- 'AUCTION_ITEM', 'BID'
+    reference_id BIGINT,
+
+    -- คำอธิบายเพิ่ม (สำหรับ UI/audit)
+    description VARCHAR(255),
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Indexes
+CREATE INDEX idx_wallet_tx_user_created
+    ON wallet_transactions(user_id, created_at DESC);
+
+CREATE INDEX idx_wallet_tx_reference
+    ON wallet_transactions(reference_type, reference_id);
