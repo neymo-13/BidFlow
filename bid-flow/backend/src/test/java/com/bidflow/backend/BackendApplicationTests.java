@@ -1,4 +1,4 @@
-package com.auction.backend;
+package com.bidflow.backend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
