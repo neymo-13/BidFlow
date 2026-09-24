@@ -4,6 +4,7 @@ import com.bidflow.backend.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -47,8 +48,16 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints (ยังไม่ต้อง login)
+                        // Public: register/login
                         .requestMatchers("/api/auth/**").permitAll()
+
+                        // /my ต้อง login (ต้องอยู่ก่อน!)
+                        .requestMatchers(HttpMethod.GET, "/api/auctions/my").authenticated()
+
+                        // Auction list + detail = public
+                        .requestMatchers(HttpMethod.GET, "/api/auctions").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auctions/*").permitAll()
+
                         // ที่เหลือต้อง login
                         // .anyRequest().permitAll()      // ชั่วคราว
                         .anyRequest().authenticated()     // ชั่วคราว
