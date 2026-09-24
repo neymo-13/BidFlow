@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;   
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -101,4 +102,42 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
+
+	// =====================================================
+	// 5. IllegalArgumentException → 400 Bad Request
+	// =====================================================
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<ErrorResponse> handleIllegalArgument(
+			IllegalArgumentException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				"Bad Request",
+				ex.getMessage(),
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+	}
+
+	// =====================================================
+	// 6. BadCredentialsException → 401 Unauthorized
+	// =====================================================
+	@ExceptionHandler(BadCredentialsException.class)
+	public ResponseEntity<ErrorResponse> handleBadCredentials(
+			BadCredentialsException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.UNAUTHORIZED.value(),
+				"Unauthorized",
+				ex.getMessage(),
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+	}
 }

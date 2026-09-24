@@ -15,11 +15,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
+@RequestMapping("/api/wallet")
 public class WalletService {
 
     private final UserRepository userRepository;
@@ -37,6 +39,13 @@ public class WalletService {
                 user.getWalletBalance()
         );
     }
+	/*
+	@GetMapping("/me")
+    public ResponseEntity<WalletResponse> getMyWallet(Authentication authentication) {
+        String username = authentication.getName(); // ดึง username จาก JWT Token
+        return ResponseEntity.ok(walletService.getWalletByUsername(username));
+    }
+	*/
 
     // =====================================================
     // 2. ฝากเงิน
@@ -63,6 +72,15 @@ public class WalletService {
 
         return toResponse(tx);
     }
+	/*
+	@PostMapping("/me/deposit")
+    public ResponseEntity<WalletTransactionResponse> deposit(
+            Authentication authentication,
+            @RequestBody DepositRequest request) {
+        String username = authentication.getName();
+        return ResponseEntity.ok(walletService.depositByUsername(username, request.getAmount()));
+    }
+	*/
 
     // =====================================================
     // 3. ถอนเงิน
@@ -98,6 +116,15 @@ public class WalletService {
 
         return toResponse(tx);
     }
+	/*
+	@PostMapping("/me/withdraw")
+    public ResponseEntity<WalletTransactionResponse> withdraw(
+            Authentication authentication,
+            @RequestBody WithdrawRequest request) {
+        String username = authentication.getName();
+        return ResponseEntity.ok(walletService.withdrawByUsername(username, request.getAmount()));
+    }
+	*/
 
     // =====================================================
     // 4. ดูประวัติ transaction (paged)
@@ -114,6 +141,16 @@ public class WalletService {
                 .findByUserIdOrderByCreatedAtDesc(userId, pageable)
                 .map(this::toResponse);
     }
+	/*
+	@GetMapping("/me/transactions")
+    public ResponseEntity<Page<WalletTransactionResponse>> getMyTransactions(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        String username = authentication.getName();
+        return ResponseEntity.ok(walletService.getTransactionsByUsername(username, page, size));
+    }
+	*/
 
     // =====================================================
     // Helper methods
@@ -136,4 +173,19 @@ public class WalletService {
                 tx.getCreatedAt()
         );
     }
+
+	@Transactional(readOnly = true)
+	public WalletResponse getWalletByUsername(String username) {
+		User user = findUserByUsername(username);
+		return new WalletResponse(
+				user.getId(),
+				user.getUsername(),
+				user.getWalletBalance()
+		);
+	}
+
+	private User findUserByUsername(String username) {
+		return userRepository.findByUsername(username)
+				.orElseThrow(() -> new UserNotFoundException("User not found: " + username));
+	}
 }

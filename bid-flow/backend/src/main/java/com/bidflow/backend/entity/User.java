@@ -4,9 +4,14 @@ import jakarta.persistence.*;          // annotation หลักของ JPA
 import lombok.*;                       // @Getter @Setter etc.
 import java.math.BigDecimal;           // type สำหรับเงิน (ไม่ใช้ double!)
 import java.time.OffsetDateTime;       // type สำหรับ timestamp + timezone
+import java.util.Collection;
+import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 @Entity                                // บอก Hibernate ว่า "นี่คือ table"
 @Table(name = "users")                 // ชื่อ table จริงใน DB (เพราะ class = User แต่ table = users)
@@ -16,7 +21,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @AllArgsConstructor                    // constructor ใส่ทุก field
 @Builder                               // ช่วยสร้าง object แบบอ่านง่าย
 
-public class User {
+public class User implements UserDetails {
 
 	@Id                                                          // primary key
 	@GeneratedValue(strategy = GenerationType.IDENTITY)          // ให้ DB auto-increment (BIGSERIAL)
@@ -46,14 +51,23 @@ public class User {
 	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
 
-	/*
-	หากในอนาคตต้องการให้ Spring Data JPA เป็นคนบันทึกเวลา createdAt และ updatedAt เองอัตโนมัติ (ไม่ต้องพึ่ง DB Default)
-	@CreationTimestamp
-	@Column(name = "created_at", nullable = false, updatable = false)
-	private OffsetDateTime createdAt;
-
-	@UpdateTimestamp
-	@Column(name = "updated_at")
-	private OffsetDateTime updatedAt;
-	*/
+	@Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+    
+    @Override
+    public String getPassword() { return passwordHash; }
+    
+    @Override
+    public String getUsername() { return username; }
+    
+    @Override
+    public boolean isAccountNonExpired() { return true; }
+    @Override
+    public boolean isAccountNonLocked() { return true; }
+    @Override
+    public boolean isCredentialsNonExpired() { return true; }
+    @Override
+    public boolean isEnabled() { return true; }
 }
