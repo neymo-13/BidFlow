@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -84,8 +85,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+	// =====================================================
+	// 4. NoResourceFoundException → 404 Not Found
+	// =====================================================
+	@ExceptionHandler(NoResourceFoundException.class)
+	public ResponseEntity<ErrorResponse> handleNoResourceFound(
+			NoResourceFoundException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.NOT_FOUND.value(),
+				"Not Found",
+				"Endpoint not found",
+				request.getRequestURI(),
+				null
+		);
+
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+	}
     // =====================================================
-    // 4. อื่น ๆ ทั้งหมด → 500 Internal Server Error
+    // 5. อื่น ๆ ทั้งหมด → 500 Internal Server Error
     // =====================================================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
@@ -105,7 +125,7 @@ public class GlobalExceptionHandler {
     }
 
 	// =====================================================
-	// 5. IllegalArgumentException → 400 Bad Request
+	// 6. IllegalArgumentException → 400 Bad Request
 	// =====================================================
 	@ExceptionHandler(IllegalArgumentException.class)
 	public ResponseEntity<ErrorResponse> handleIllegalArgument(
@@ -124,7 +144,7 @@ public class GlobalExceptionHandler {
 	}
 
 	// =====================================================
-	// 6. BadCredentialsException → 401 Unauthorized
+	// 7. BadCredentialsException → 401 Unauthorized
 	// =====================================================
 	@ExceptionHandler(BadCredentialsException.class)
 	public ResponseEntity<ErrorResponse> handleBadCredentials(
@@ -143,7 +163,7 @@ public class GlobalExceptionHandler {
 	}
 
 	// =====================================================
-	// 7. AccessDeniedException  → 403 Forbidden
+	// 8. AccessDeniedException  → 403 Forbidden
 	// =====================================================
 	@ExceptionHandler(AccessDeniedException.class)
 	public ResponseEntity<ErrorResponse> handleAccessDenied(

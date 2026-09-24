@@ -15,13 +15,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-@RequestMapping("/api/wallet")
 public class WalletService {
 
     private final UserRepository userRepository;
@@ -39,21 +37,17 @@ public class WalletService {
                 user.getWalletBalance()
         );
     }
-	/*
-	@GetMapping("/me")
-    public ResponseEntity<WalletResponse> getMyWallet(Authentication authentication) {
-        String username = authentication.getName(); // ดึง username จาก JWT Token
-        return ResponseEntity.ok(walletService.getWalletByUsername(username));
-    }
-	*/
 
     // =====================================================
     // 2. ฝากเงิน
     // =====================================================
     @Transactional // ถ้า method นี้ throw error | ทุก DB change ที่ทำใน method นี้จะ rollback ทั้งหมด
-    public WalletTransactionResponse deposit(Long userId, BigDecimal amount) {
-        User user = findUser(userId);
+	public WalletTransactionResponse deposit(Long userId, BigDecimal amount) {
+		User user = findUser(userId);
+		return depositInternal(user, amount);
+	}
 
+	private WalletTransactionResponse depositInternal(User user, BigDecimal amount) {
         // 1) อัปเดตยอดเงิน
         BigDecimal newBalance = user.getWalletBalance().add(amount);
         user.setWalletBalance(newBalance);
@@ -72,27 +66,22 @@ public class WalletService {
 
         return toResponse(tx);
     }
-	/*
-	@PostMapping("/me/deposit")
-    public ResponseEntity<WalletTransactionResponse> deposit(
-            Authentication authentication,
-            @RequestBody DepositRequest request) {
-        String username = authentication.getName();
-        return ResponseEntity.ok(walletService.depositByUsername(username, request.getAmount()));
-    }
-	*/
 
     // =====================================================
     // 3. ถอนเงิน
     // =====================================================
     @Transactional
-    public WalletTransactionResponse withdraw(Long userId, BigDecimal amount) {
-        User user = findUser(userId);
+	public WalletTransactionResponse withdraw(Long userId, BigDecimal amount) {
+		User user = findUser(userId);
+		return withdrawInternal(user, amount);
+	}
+
+	private WalletTransactionResponse withdrawInternal(User user, BigDecimal amount) {
 
         // 1) เช็คยอดเงิน
         if (user.getWalletBalance().compareTo(amount) < 0) {
             throw new InsufficientBalanceException(
-                    userId,
+                    user.getId(),
                     user.getWalletBalance(),
                     amount
             );
@@ -116,15 +105,6 @@ public class WalletService {
 
         return toResponse(tx);
     }
-	/*
-	@PostMapping("/me/withdraw")
-    public ResponseEntity<WalletTransactionResponse> withdraw(
-            Authentication authentication,
-            @RequestBody WithdrawRequest request) {
-        String username = authentication.getName();
-        return ResponseEntity.ok(walletService.withdrawByUsername(username, request.getAmount()));
-    }
-	*/
 
     // =====================================================
     // 4. ดูประวัติ transaction (paged)
@@ -141,16 +121,6 @@ public class WalletService {
                 .findByUserIdOrderByCreatedAtDesc(userId, pageable)
                 .map(this::toResponse);
     }
-	/*
-	@GetMapping("/me/transactions")
-    public ResponseEntity<Page<WalletTransactionResponse>> getMyTransactions(
-            Authentication authentication,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        String username = authentication.getName();
-        return ResponseEntity.ok(walletService.getTransactionsByUsername(username, page, size));
-    }
-	*/
 
     // =====================================================
     // Helper methods
@@ -187,5 +157,37 @@ public class WalletService {
 	private User findUserByUsername(String username) {
 		return userRepository.findByUsername(username)
 				.orElseThrow(() -> new UserNotFoundException("User not found: " + username));
+	}
+
+	// =====================================================
+	// ฝากเงิน (by username)
+	// =====================================================
+	@Transactional
+	public WalletTransactionResponse depositByUsername(String username, BigDecimal amount) {
+		User user = findUserByUsername(username);
+		return depositInternal(user, amount);
+	}
+
+	// =====================================================
+	// ถอนเงิน (by username)
+	// =====================================================
+	@Transactional
+	public WalletTransactionResponse withdrawByUsername(String username, BigDecimal amount) {
+		User user = findUserByUsername(username);
+		return withdrawInternal(user, amount);
+	}
+
+	// =====================================================
+	// ดู transactions (by username)
+	// =====================================================
+	@Transactional(readOnly = true)
+	public Page<WalletTransactionResponse> getTransactionsByUsername(
+			String username, int page, int size) {
+
+		User user = findUserByUsername(username);
+		Pageable pageable = PageRequest.of(page, size);
+		return walletTransactionRepository
+				.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
+				.map(this::toResponse);
 	}
 }

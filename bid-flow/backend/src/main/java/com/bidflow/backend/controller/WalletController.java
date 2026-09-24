@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,56 +18,69 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class WalletController {
 
-	private final WalletService walletService;
+    private final WalletService walletService;
 
     // =====================================================
-    // 1. ดูยอดเงินใน wallet
-    // GET /api/wallet/{userId}
+    // Helper: ดึง username จาก SecurityContext
     // =====================================================
-    @GetMapping("/{userId}")
-    public WalletResponse getWallet(@PathVariable Long userId) {
-        return walletService.getWallet(userId);
+    private String getCurrentUsername() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
+    }
+
+    // =====================================================
+    // 1. ดูยอดเงินของตัวเอง
+    // GET /api/wallet/me
+    // =====================================================
+    @GetMapping("/me")
+    public WalletResponse getMyWallet() {
+        return walletService.getWalletByUsername(getCurrentUsername());
     }
 
     // =====================================================
     // 2. ฝากเงิน
-    // POST /api/wallet/{userId}/deposit
+    // POST /api/wallet/me/deposit
     // Body: { "amount": 5000.00 }
     // =====================================================
-    @PostMapping("/{userId}/deposit")
+    @PostMapping("/me/deposit")
     public ResponseEntity<WalletTransactionResponse> deposit(
-            @PathVariable Long userId,
             @Valid @RequestBody DepositRequest request) {
 
-        WalletTransactionResponse response = walletService.deposit(userId, request.amount());
+        WalletTransactionResponse response = walletService.depositByUsername(
+                getCurrentUsername(),
+                request.amount()
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // =====================================================
     // 3. ถอนเงิน
-    // POST /api/wallet/{userId}/withdraw
+    // POST /api/wallet/me/withdraw
     // Body: { "amount": 1000.00 }
     // =====================================================
-    @PostMapping("/{userId}/withdraw")
+    @PostMapping("/me/withdraw")
     public ResponseEntity<WalletTransactionResponse> withdraw(
-            @PathVariable Long userId,
             @Valid @RequestBody WithdrawRequest request) {
 
-        WalletTransactionResponse response = walletService.withdraw(userId, request.amount());
+        WalletTransactionResponse response = walletService.withdrawByUsername(
+                getCurrentUsername(),
+                request.amount()
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-
     // =====================================================
-    // 4. ดูประวัติ transaction
-    // GET /api/wallet/{userId}/transactions?page=0&size=20
+    // 4. ดูประวัติ transaction ของตัวเอง
+    // GET /api/wallet/me/transactions?page=0&size=20
     // =====================================================
-    @GetMapping("/{userId}/transactions")
-    public Page<WalletTransactionResponse> getTransactions(
-            @PathVariable Long userId,
+    @GetMapping("/me/transactions")
+    public Page<WalletTransactionResponse> getMyTransactions(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        return walletService.getTransactions(userId, page, size);
+        return walletService.getTransactionsByUsername(
+                getCurrentUsername(),
+                page,
+                size
+        );
     }
 }
