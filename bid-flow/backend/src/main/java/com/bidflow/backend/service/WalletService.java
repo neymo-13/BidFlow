@@ -255,4 +255,28 @@ public class WalletService {
 
 		return tx;
 	}
+
+	// =====================================================
+	// Settle: winner's held money → seller's balance
+	// (winner's money already held — just credit seller)
+	// =====================================================
+	@Transactional
+	public void settleToSeller(User winner, User seller, BigDecimal amount, Long auctionId) {
+		// 1) Seller ได้เงิน
+		BigDecimal newSellerBalance = seller.getWalletBalance().add(amount);
+		seller.setWalletBalance(newSellerBalance);
+
+		WalletTransaction sellerTx = WalletTransaction.builder()
+				.user(seller)
+				.amount(amount)
+				.balanceAfter(newSellerBalance)
+				.type(TransactionType.SELLER_PAYOUT)
+				.referenceType(ReferenceType.AUCTION_ITEM)
+				.referenceId(auctionId)
+				.description("Payout for auction " + auctionId)
+				.build();
+		walletTransactionRepository.save(sellerTx);
+		userRepository.save(seller);
+
+	}
 }

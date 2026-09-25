@@ -22,4 +22,13 @@ public class BidEventPublisher {
                 event.amount(),
                 event.sequence());
     }
+
+	public void publishAuctionEnded(BidEvent event) {
+		String destination = "/topic/auctions/" + event.auctionId();
+		messagingTemplate.convertAndSend(destination, event);
+		log.info("Broadcast AUCTION_ENDED for auction {} — winner={}, amount={}",
+				event.auctionId(),
+				event.bidderUsername(),
+				event.amount());
+	}
 }
