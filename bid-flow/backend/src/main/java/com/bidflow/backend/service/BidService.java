@@ -1,5 +1,6 @@
 package com.bidflow.backend.service;
 
+import com.bidflow.backend.dto.BidEvent;
 import com.bidflow.backend.dto.BidResponse;
 import com.bidflow.backend.dto.BidSummaryResponse;
 import com.bidflow.backend.entity.AuctionItem;
@@ -36,6 +37,7 @@ public class BidService {
     private final UserRepository userRepository;
     private final WalletService walletService;
     private final TransactionTemplate transactionTemplate; // ใช้ programmatic transaction เพื่อให้ commit ก่อนปลด lock
+	private final BidEventPublisher bidEventPublisher;
 
     // =====================================================
     // Place Bid
@@ -154,6 +156,20 @@ public class BidService {
 
         log.info("Bid placed: auction={}, bidder={}, amount={}, seq={}",
                 auctionId, username, amount, nextSequence);
+
+		// 12) Broadcast event ให้ clients ที่ subscribe
+		BidEvent event = new BidEvent(
+				"BID_PLACED",
+				auctionId,
+				bid.getId(),
+				bidder.getId(),
+				bidder.getUsername(),
+				bid.getBidAmount(),
+				bid.getBidSequence(),
+				auction.getCurrentPrice(),
+				OffsetDateTime.now()
+		);
+		bidEventPublisher.publishBidPlaced(event);
 
         return toResponse(bid);
     }

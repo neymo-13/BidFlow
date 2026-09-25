@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
                 .authorizeHttpRequests(auth -> auth
+						// WebSocket handshake
+						.requestMatchers("/ws/**").permitAll()
                         // Public: register/login
                         .requestMatchers("/api/auth/**").permitAll()
 
