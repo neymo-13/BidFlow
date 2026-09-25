@@ -4,6 +4,7 @@ import com.bidflow.backend.dto.WalletResponse;
 import com.bidflow.backend.dto.WalletTransactionResponse;
 import com.bidflow.backend.entity.User;
 import com.bidflow.backend.entity.WalletTransaction;
+import com.bidflow.backend.enums.ReferenceType;
 import com.bidflow.backend.enums.TransactionType;
 import com.bidflow.backend.exception.InsufficientBalanceException;
 import com.bidflow.backend.exception.UserNotFoundException;
@@ -189,5 +190,69 @@ public class WalletService {
 		return walletTransactionRepository
 				.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
 				.map(this::toResponse);
+	}
+
+	// =====================================================
+	// Hold เงิน (ใช้ตอน bid)
+	// =====================================================
+	@Transactional
+	public WalletTransaction hold(
+			User user,
+			BigDecimal amount,
+			Long auctionItemId
+	) {
+		if (user.getWalletBalance().compareTo(amount) < 0) {
+			throw new InsufficientBalanceException(
+					user.getId(),
+					user.getWalletBalance(),
+					amount
+			);
+		}
+
+		BigDecimal newBalance = user.getWalletBalance().subtract(amount);
+		user.setWalletBalance(newBalance);
+
+		WalletTransaction tx = WalletTransaction.builder()
+				.user(user)
+				.amount(amount.negate())
+				.balanceAfter(newBalance)
+				.type(TransactionType.BID_HOLD)
+				.referenceType(ReferenceType.AUCTION_ITEM)
+				.referenceId(auctionItemId)
+				.description("Hold for bid on auction " + auctionItemId)
+				.build();
+
+		walletTransactionRepository.save(tx);
+		userRepository.save(user);
+
+		return tx;
+	}
+
+	// =====================================================
+	// Release เงิน (ใช้ตอนถูก outbid)
+	// =====================================================
+	@Transactional
+	public WalletTransaction release(
+			User user,
+			BigDecimal amount,
+			Long auctionItemId
+	) {
+		BigDecimal newBalance = user.getWalletBalance().add(amount);
+		user.setWalletBalance(newBalance);
+
+		WalletTransaction tx = WalletTransaction.builder()
+				.user(user)
+				.amount(amount)
+				.balanceAfter(newBalance)
+				.type(TransactionType.BID_RELEASE)
+				.referenceType(ReferenceType.AUCTION_ITEM)
+				.referenceId(auctionItemId)
+				.description("Release from outbid on auction " + auctionItemId)
+				.build();
+
+		walletTransactionRepository.save(tx);
+		userRepository.save(user);
+
+		return tx;
 	}
 }

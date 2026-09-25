@@ -57,6 +57,7 @@ public class SecurityConfig {
                         // Auction list + detail = public
                         .requestMatchers(HttpMethod.GET, "/api/auctions").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auctions/*").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/auctions/*/bids").permitAll()
 
                         // ที่เหลือต้อง login
                         // .anyRequest().permitAll()      // ชั่วคราว
