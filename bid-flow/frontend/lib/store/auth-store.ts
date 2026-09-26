@@ -15,6 +15,7 @@ interface AuthState {
   logout: () => void;
   loadUser: () => Promise<void>;
   clearError: () => void;
+  refreshUser: () => Promise<void>; 
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -93,6 +94,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  refreshUser: async () => {
+    if (typeof window === "undefined") return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const user = await authApi.getMe();
+      set({ user });
+    } catch (e) {
+      console.warn("Failed to refresh user:", e);
+    }
+  },
 }));
 
 // =====================================================
