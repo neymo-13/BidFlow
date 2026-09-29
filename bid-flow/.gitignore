@@ -23,6 +23,9 @@ Thumbs.db
 .env.local
 *.local
 
+# ===== Machine-specific overrides =====
+docker-compose.local.yml
+
 # ===== Logs =====
 *.log
 logs/

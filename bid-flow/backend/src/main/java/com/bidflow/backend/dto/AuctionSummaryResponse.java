@@ -9,7 +9,9 @@ public record AuctionSummaryResponse(
         String title,
         BigDecimal currentPrice,
         AuctionStatus status,
+        OffsetDateTime startTime,
         OffsetDateTime endTime,
         Integer totalBids,
-        String sellerUsername
+        String sellerUsername,
+        String primaryImageUrl      // null = ยังไม่มีรูป
 ) {}

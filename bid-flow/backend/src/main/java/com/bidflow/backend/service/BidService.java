@@ -3,6 +3,7 @@ package com.bidflow.backend.service;
 import com.bidflow.backend.dto.BidEvent;
 import com.bidflow.backend.dto.BidResponse;
 import com.bidflow.backend.dto.BidSummaryResponse;
+import com.bidflow.backend.dto.MyBidResponse;
 import com.bidflow.backend.entity.AuctionItem;
 import com.bidflow.backend.entity.Bid;
 import com.bidflow.backend.entity.User;
@@ -24,18 +25,26 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BidService {
 
+    private static final int MAX_PAGE_SIZE = 50;
+
     private final RedissonClient redissonClient;
     private final AuctionItemRepository auctionItemRepository;
     private final BidRepository bidRepository;
     private final UserRepository userRepository;
     private final WalletService walletService;
+    private final NotificationService notificationService;
+    private final AuctionImageService auctionImageService;
     private final TransactionTemplate transactionTemplate; // ใช้ programmatic transaction เพื่อให้ commit ก่อนปลด lock
 	private final BidEventPublisher bidEventPublisher;
 
@@ -157,6 +166,17 @@ public class BidService {
         log.info("Bid placed: auction={}, bidder={}, amount={}, seq={}",
                 auctionId, username, amount, nextSequence);
 
+        // 11.1) แจ้งผู้นำเดิมว่าโดนบิดแซง (คนเดิมขึ้นราคาตัวเองไม่ต้องแจ้ง)
+        //       อยู่ใน transaction เดียวกับการบิด → บิดล้มเหลว notification ก็ rollback ไปด้วย
+        if (previousHighest != null && !previousHighest.getBidder().getId().equals(bidder.getId())) {
+            notificationService.create(
+                    previousHighest.getBidder(), auction,
+                    "You've been outbid",
+                    "Someone bid " + amount.toPlainString() + " on '" + auction.getTitle()
+                            + "'. Bid again to take the lead."
+            );
+        }
+
 		// 12) Broadcast event ให้ clients ที่ subscribe
 		BidEvent event = new BidEvent(
 				"BID_PLACED",
@@ -189,8 +209,59 @@ public class BidService {
     }
 
     // =====================================================
+    // My Bids: 1 แถวต่อ auction ที่เคยบิด + ผลของฉัน
+    // =====================================================
+    @Transactional(readOnly = true)
+    public Page<MyBidResponse> getMyBids(String username, int page, int size) {
+        User me = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(username));
+
+        Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE));
+        Page<BidRepository.MyBidAggregate> rows = bidRepository.findMyBidAggregates(me.getId(), pageable);
+
+        // โหลด auction ของทั้งหน้าใน query เดียว
+        List<Long> auctionIds = rows.map(BidRepository.MyBidAggregate::getAuctionId).getContent();
+        Map<Long, AuctionItem> auctions = auctionItemRepository.findAllById(auctionIds).stream()
+                .collect(Collectors.toMap(AuctionItem::getId, Function.identity()));
+        Map<Long, String> imageUrls = auctionImageService.getPrimaryImageUrls(auctionIds);
+
+        return rows.map(row -> toMyBid(
+                row, auctions.get(row.getAuctionId()), imageUrls.get(row.getAuctionId()), me.getId()));
+    }
+
+    // =====================================================
     // Helper
     // =====================================================
+    private MyBidResponse toMyBid(
+            BidRepository.MyBidAggregate row, AuctionItem auction, String primaryImageUrl, Long myId) {
+        return new MyBidResponse(
+                auction.getId(),
+                auction.getTitle(),
+                auction.getStatus(),
+                auction.getCurrentPrice(),
+                auction.getEndTime(),
+                row.getMyHighestBid(),
+                row.getMyBidCount(),
+                row.getLastBidAt(),
+                resolveResult(auction, row.getMyHighestBid(), myId),
+                primaryImageUrl
+        );
+    }
+
+    // บิดใหม่ต้องสูงกว่าราคาเดิมเสมอ → บิดสูงสุดไม่ซ้ำกัน จึงดูว่านำอยู่จาก myMax == currentPrice ได้
+    private MyBidResponse.Result resolveResult(AuctionItem auction, BigDecimal myHighestBid, Long myId) {
+        return switch (auction.getStatus()) {
+            case ACTIVE -> myHighestBid.compareTo(auction.getCurrentPrice()) == 0
+                    ? MyBidResponse.Result.LEADING
+                    : MyBidResponse.Result.OUTBID;
+            case ENDED -> auction.getWinner() != null && auction.getWinner().getId().equals(myId)
+                    ? MyBidResponse.Result.WON
+                    : MyBidResponse.Result.LOST;
+            // DRAFT มีบิดไม่ได้ (บิดได้เฉพาะ ACTIVE) — รวมไว้กับ CANCELLED
+            case CANCELLED, DRAFT -> MyBidResponse.Result.CANCELLED;
+        };
+    }
+
     private BidResponse toResponse(Bid bid) {
         return new BidResponse(
                 bid.getId(),

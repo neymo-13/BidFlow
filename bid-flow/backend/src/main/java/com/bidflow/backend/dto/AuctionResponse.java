@@ -3,6 +3,7 @@ package com.bidflow.backend.dto;
 import com.bidflow.backend.enums.AuctionStatus;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public record AuctionResponse(
         Long id,
@@ -20,5 +21,6 @@ public record AuctionResponse(
         OffsetDateTime endTime,
         Integer totalBids,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        List<AuctionImageResponse> images      // เรียงตาม displayOrder · url เป็น presigned อายุสั้น
 ) {}

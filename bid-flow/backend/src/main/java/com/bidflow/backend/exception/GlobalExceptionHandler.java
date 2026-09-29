@@ -8,6 +8,10 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -25,6 +29,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUserNotFound(
             UserNotFoundException ex,
+            HttpServletRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                OffsetDateTime.now(),
+                HttpStatus.NOT_FOUND.value(),
+                "Not Found",
+                ex.getMessage(),
+                request.getRequestURI(),
+                null
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    // =====================================================
+    // 1.1 AuctionNotFoundException → 404 Not Found
+    //     (รวม DRAFT/CANCELLED ที่คนเรียกไม่ใช่เจ้าของ — ไม่บอกว่ามีอยู่)
+    // =====================================================
+    @ExceptionHandler(AuctionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAuctionNotFound(
+            AuctionNotFoundException ex,
             HttpServletRequest request) {
 
         ErrorResponse error = new ErrorResponse(
@@ -137,6 +161,64 @@ public class GlobalExceptionHandler {
 				HttpStatus.BAD_REQUEST.value(),
 				"Bad Request",
 				ex.getMessage(),
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+	}
+
+	// =====================================================
+	// 6.1 MethodArgumentTypeMismatchException → 400 Bad Request
+	//     (เช่น ?status=FOO ที่แปลงเป็น enum ไม่ได้)
+	// =====================================================
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> handleTypeMismatch(
+			MethodArgumentTypeMismatchException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				"Bad Request",
+				"Invalid value for parameter '" + ex.getName() + "'",
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+	}
+
+	// =====================================================
+	// 6.2 ไฟล์อัปโหลดใหญ่เกิน spring.servlet.multipart.max-file-size → 413
+	// =====================================================
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ErrorResponse> handleMaxUploadSize(
+			MaxUploadSizeExceededException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.CONTENT_TOO_LARGE.value(),
+				"Payload Too Large",
+				"File must be at most 5 MB",
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(error);
+	}
+
+	// =====================================================
+	// 6.3 ไม่ได้ส่ง multipart / ไม่มี part "file" → 400
+	// =====================================================
+	@ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
+	public ResponseEntity<ErrorResponse> handleBadMultipart(
+			Exception ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				"Bad Request",
+				"Request must be multipart/form-data with a 'file' part",
 				request.getRequestURI(),
 				null
 		);

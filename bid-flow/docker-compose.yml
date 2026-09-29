@@ -37,6 +37,22 @@ services:
     networks:
       - bidflow-network
 
+  # S3-compatible object storage for item images (dev only).
+  # Production uses AWS S3 instead: leave STORAGE_ENDPOINT empty and use real credentials / an IAM role.
+  object-storage:
+    image: adobe/s3mock:5.2.3
+    container_name: auction-object-storage
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    volumes:
+      - object_storage_data:/s3mockroot
+    networks:
+      - bidflow-network
+
   backend:
     build:
       context: ./backend
@@ -47,17 +63,28 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      STORAGE_BUCKET: bidflow-images
+      STORAGE_REGION: us-east-1
+      STORAGE_ENDPOINT: http://object-storage:9090      # address inside the Docker network
+      STORAGE_PUBLIC_ENDPOINT: http://localhost:9090    # address the browser uses for image URLs
+      STORAGE_PATH_STYLE: "true"
+      # Dummy dev-only keys: s3mock does not check credentials (same idea as the Postgres password above)
+      STORAGE_ACCESS_KEY: dev-access-key
+      STORAGE_SECRET_KEY: dev-secret-key
     depends_on:
       postgres-db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      object-storage:
+        condition: service_started
     networks:
       - bidflow-network
 
 volumes:
   postgres_data:
   redis_data:
+  object_storage_data:
 
 networks:
   bidflow-network:

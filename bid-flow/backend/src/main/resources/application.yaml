@@ -22,9 +22,33 @@ spring:
       host: localhost
       port: 6379
 
+  # อัปโหลดรูปสินค้า: ไฟล์ละไม่เกิน 5 MB
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+# ไฟล์ที่เกินขนาด: ให้ Tomcat อ่าน body ที่เหลือทิ้ง (สูงสุด 10 MB) ก่อนตอบ 413
+# ค่าเริ่มต้น 2 MB จะตัด connection ทันที ทำให้บางครั้ง client ไม่ได้รับ 413 และค้างรอ
+server:
+  tomcat:
+    max-swallow-size: 10MB
+
 app:
   jwt:
     # DEV ONLY — production ต้องเก็บใน env var
     # ต้อง Base64 encode + ยาวอย่างน้อย 32 bytes
     secret: "ZGV2LW9ubHktc2VjcmV0LWtleS1mb3ItYmlkZmxvdy1hdWN0aW9uLXByb2plY3Q="
     expiration-ms: 86400000   # 24 ชั่วโมง = 24 * 60 * 60 * 1000
+
+  # Object storage (S3 / S3-compatible) — ตั้งค่าผ่าน env เท่านั้น
+  # STORAGE_ENDPOINT ว่าง = AWS S3 จริง · STORAGE_ACCESS_KEY/SECRET_KEY ว่าง = AWS default credentials (เช่น IAM role)
+  storage:
+    bucket: ${STORAGE_BUCKET:bidflow-images}
+    region: ${STORAGE_REGION:us-east-1}
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9090}
+    public-endpoint: ${STORAGE_PUBLIC_ENDPOINT:}
+    access-key: ${STORAGE_ACCESS_KEY:}
+    secret-key: ${STORAGE_SECRET_KEY:}
+    path-style: ${STORAGE_PATH_STYLE:true}
+    url-expiry-minutes: 60

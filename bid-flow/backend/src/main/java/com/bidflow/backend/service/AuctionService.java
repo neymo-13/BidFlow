@@ -7,8 +7,10 @@ import com.bidflow.backend.dto.UpdateAuctionRequest;
 import com.bidflow.backend.entity.AuctionItem;
 import com.bidflow.backend.entity.User;
 import com.bidflow.backend.enums.AuctionStatus;
+import com.bidflow.backend.exception.AuctionNotFoundException;
 import com.bidflow.backend.exception.UserNotFoundException;
 import com.bidflow.backend.repository.AuctionItemRepository;
+import com.bidflow.backend.repository.AuctionSpecifications;
 import com.bidflow.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,12 +21,35 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 public class AuctionService {
 
+    // สถานะที่คนทั่วไปเห็นได้ (FR-13)
+    private static final Set<AuctionStatus> PUBLIC_STATUSES =
+            EnumSet.of(AuctionStatus.ACTIVE, AuctionStatus.ENDED);
+
+    private static final int MAX_PAGE_SIZE = 50;
+    private static final int MAX_KEYWORD_LENGTH = 100;
+
+    // ค่า sort ที่รับได้ (whitelist) — ต่อท้ายด้วย id เพื่อให้ลำดับคงที่ข้ามหน้า
+    private static final Map<String, Sort> SORTS = Map.of(
+            "newest", Sort.by(Sort.Direction.DESC, "createdAt", "id"),
+            "endingSoon", Sort.by(Sort.Order.asc("endTime"), Sort.Order.desc("id")),
+            "priceAsc", Sort.by(Sort.Order.asc("currentPrice"), Sort.Order.desc("id")),
+            "priceDesc", Sort.by(Sort.Direction.DESC, "currentPrice", "id"),
+            "mostBids", Sort.by(Sort.Direction.DESC, "totalBids", "id")
+    );
+    private static final String DEFAULT_SORT = "newest";
+
     private final AuctionItemRepository auctionItemRepository;
     private final UserRepository userRepository;
+    private final AuctionImageService auctionImageService;
 
     // =====================================================
     // 1. สร้าง auction ใหม่
@@ -64,32 +89,38 @@ public class AuctionService {
 
     // =====================================================
     // 2. ดูรายละเอียด auction
+    //    DRAFT / CANCELLED เห็นได้เฉพาะเจ้าของ คนอื่นได้ 404 (ไม่บอกว่ามีอยู่)
     // =====================================================
     @Transactional(readOnly = true)
-    public AuctionResponse getAuction(Long auctionId) {
-        AuctionItem auction = findAuction(auctionId);
+    public AuctionResponse getAuction(Long auctionId, String currentUsername) {
+        AuctionItem auction = auctionItemRepository.findById(auctionId)
+                .filter(a -> PUBLIC_STATUSES.contains(a.getStatus())
+                        || a.getSeller().getUsername().equals(currentUsername))
+                .orElseThrow(() -> new AuctionNotFoundException(auctionId));
         return toResponse(auction);
     }
 
     // =====================================================
-    // 3. ดู list auctions (pagination + filter)
+    // 3. ดู list auctions (pagination + filter + ค้นหา + เรียง)
+    //    แสดงเฉพาะ ACTIVE / ENDED — ไม่ส่ง status = ทั้งสองสถานะ
     // =====================================================
     @Transactional(readOnly = true)
     public Page<AuctionSummaryResponse> listAuctions(
             AuctionStatus status,
+            String keyword,
+            String sort,
             int page,
             int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
-        Page<AuctionItem> auctions;
-        if (status != null) {
-            auctions = auctionItemRepository.findByStatus(status, pageable);
-        } else {
-            auctions = auctionItemRepository.findAll(pageable);
+        if (status != null && !PUBLIC_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("status must be one of " + PUBLIC_STATUSES);
         }
 
-        return auctions.map(this::toSummary);
+        Set<AuctionStatus> statuses = status != null ? EnumSet.of(status) : PUBLIC_STATUSES;
+        Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), resolveSort(sort));
+
+        return toSummaryPage(auctionItemRepository
+                .findAll(AuctionSpecifications.search(statuses, normalizeKeyword(keyword)), pageable));
     }
 
     // =====================================================
@@ -163,6 +194,33 @@ public class AuctionService {
     }
 
     // =====================================================
+    // 5.1 Publish auction (เฉพาะเจ้าของ + DRAFT + endTime ยังไม่ผ่าน)
+    //     ถ้า startTime ผ่านแล้วจะเปิดประมูลทันที · ยังไม่ถึงก็บิดไม่ได้จนกว่าจะถึง (BidService)
+    // =====================================================
+    @Transactional
+    public AuctionResponse publishAuction(Long auctionId, String currentUsername) {
+        AuctionItem auction = findAuction(auctionId);
+
+        ensureOwner(auction, currentUsername);
+
+        if (auction.getStatus() != AuctionStatus.DRAFT) {
+            throw new IllegalArgumentException(
+                    "Cannot publish auction in status: " + auction.getStatus()
+                            + ". Only DRAFT can be published."
+            );
+        }
+
+        if (!auction.getEndTime().isAfter(OffsetDateTime.now())) {
+            throw new IllegalArgumentException(
+                    "Cannot publish: end time has already passed. Update the end time first."
+            );
+        }
+
+        auction.setStatus(AuctionStatus.ACTIVE);
+        return toResponse(auction);
+    }
+
+    // =====================================================
     // 6. ดู auction ของตัวเอง
     // =====================================================
     @Transactional(readOnly = true)
@@ -175,8 +233,7 @@ public class AuctionService {
                 .orElseThrow(() -> new UserNotFoundException(currentUsername));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return auctionItemRepository.findBySellerId(seller.getId(), pageable)
-                .map(this::toSummary);
+        return toSummaryPage(auctionItemRepository.findBySellerId(seller.getId(), pageable));
     }
 
     // =====================================================
@@ -186,6 +243,27 @@ public class AuctionService {
     private AuctionItem findAuction(Long auctionId) {
         return auctionItemRepository.findById(auctionId)
                 .orElseThrow(() -> new IllegalArgumentException("Auction not found: " + auctionId));
+    }
+
+    private Sort resolveSort(String sort) {
+        Sort resolved = SORTS.get(sort == null || sort.isBlank() ? DEFAULT_SORT : sort);
+        if (resolved == null) {
+            throw new IllegalArgumentException("sort must be one of " + SORTS.keySet());
+        }
+        return resolved;
+    }
+
+    // ตัดช่องว่าง · ว่าง = ไม่ค้นหา · ยาวเกินกำหนด = 400
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (trimmed.length() > MAX_KEYWORD_LENGTH) {
+            throw new IllegalArgumentException(
+                    "q must be at most " + MAX_KEYWORD_LENGTH + " characters");
+        }
+        return trimmed;
     }
 
     private void ensureOwner(AuctionItem auction, String currentUsername) {
@@ -211,19 +289,29 @@ public class AuctionService {
                 a.getEndTime(),
                 a.getTotalBids(),
                 a.getCreatedAt(),
-                a.getUpdatedAt()
+                a.getUpdatedAt(),
+                auctionImageService.getImages(a.getId())
         );
     }
 
-    private AuctionSummaryResponse toSummary(AuctionItem a) {
+    // ดึง URL รูปหลักของทั้งหน้าใน query เดียว แล้วค่อยแปลงแต่ละแถว
+    private Page<AuctionSummaryResponse> toSummaryPage(Page<AuctionItem> auctions) {
+        Map<Long, String> imageUrls = auctionImageService.getPrimaryImageUrls(
+                auctions.map(AuctionItem::getId).getContent());
+        return auctions.map(a -> toSummary(a, imageUrls.get(a.getId())));
+    }
+
+    private AuctionSummaryResponse toSummary(AuctionItem a, String primaryImageUrl) {
         return new AuctionSummaryResponse(
                 a.getId(),
                 a.getTitle(),
                 a.getCurrentPrice(),
                 a.getStatus(),
+                a.getStartTime(),
                 a.getEndTime(),
                 a.getTotalBids(),
-                a.getSeller().getUsername()
+                a.getSeller().getUsername(),
+                primaryImageUrl
         );
     }
 }

@@ -23,6 +23,7 @@ This README precisely reflects the current implementation in the `backend` sourc
 - Spring WebSocket / STOMP (SockJS fallback)
 - Redisson (distributed locks) with Redis
 - JJWT (io.jsonwebtoken) for token handling
+- AWS SDK for Java v2 (`software.amazon.awssdk:s3`, BOM 2.55.6) for item photos in S3 or any S3-compatible store (dev uses `adobe/s3mock`)
 - Docker / Docker Compose for quick local environment
 
 3. Architecture (high-level)
@@ -32,19 +33,22 @@ This README precisely reflects the current implementation in the `backend` sourc
 - Wallet: `WalletService` keeps `User.walletBalance` and appends `WalletTransaction` ledger entries for DEPOSIT, WITHDRAW, BID_HOLD, BID_RELEASE, SELLER_PAYOUT.
 - Settlement: `AuctionSettlementService` (scheduler) finds expired auctions and calls `AuctionSettlementExecutor.settleAuction(auctionId)`; `settleAuction` is `@Transactional` and finalizes winner, calls `walletService.settleToSeller(...)`, creates notifications, and publishes an `AUCTION_ENDED` event.
 - Real-time: `BidEventPublisher` sends events to `/topic/auctions/{auctionId}` via `SimpMessagingTemplate`.
+- Visibility: `DRAFT` / `CANCELLED` auctions are visible to their seller only — `GET /api/auctions/{id}` answers 404 to anyone else, and `GET /api/auctions` lists `ACTIVE` / `ENDED` only.
+- Photos: `AuctionImageService` checks ownership + DRAFT, detects the type from the file's magic bytes (JPEG / PNG / WebP), stores it through `StorageService` under `auctions/{id}/{uuid}.{ext}` and records it in `item_images`. The bucket is private; responses carry presigned GET URLs valid for 60 minutes. `StorageService` creates the bucket when the app is ready and only logs a warning if storage is unreachable.
 
 4. Project Structure (packages)
-- `controller` — REST controllers: `AuthController`, `UserController`, `AuctionController`, `BidController`, `WalletController`, `NotificationController`.
-- `service` — business logic: `AuthService`, `AuctionService`, `BidService`, `WalletService`, `NotificationService`, `AuctionSettlementService`, `AuctionSettlementExecutor`, `BidEventPublisher`.
+- `controller` — REST controllers: `AuthController`, `UserController`, `AuctionController`, `BidController`, `MyBidController`, `WalletController`, `NotificationController`.
+- `service` — business logic: `AuthService`, `AuctionService`, `AuctionImageService`, `StorageService`, `BidService`, `WalletService`, `NotificationService`, `AuctionSettlementService`, `AuctionSettlementExecutor`, `BidEventPublisher`.
 - `dto` — request/response records (e.g., `PlaceBidRequest`, `BidResponse`, `AuctionResponse`, `BidEvent`).
 - `entity` / `repository` — JPA entities and Spring Data repositories.
-- `config` / `security` / `exception` — WebSocket, SecurityConfig, Jwt* classes, and `GlobalExceptionHandler`.
+- `config` / `security` / `exception` — WebSocket, SecurityConfig, `StorageConfig` (S3 client + presigner), Jwt* classes, and `GlobalExceptionHandler`.
 
 5. Prerequisites
 - JDK 21
 - Maven
 - PostgreSQL (or Docker via compose)
 - Redis (or Docker via compose)
+- S3-compatible object storage (or Docker via compose) — without it the app still starts, but photo upload fails
 - Docker & Docker Compose (optional, recommended for local dev)
 
 6. Configuration / Environment variables
@@ -55,6 +59,19 @@ This README precisely reflects the current implementation in the `backend` sourc
   - `spring.data.redis.host` / `port` (defaults `localhost:6379`)
   - `app.jwt.secret` (DEV default exists in `application.yaml`, must be Base64; production should set via env var)
   - `app.jwt.expiration-ms` (token lifetime)
+  - `spring.servlet.multipart.max-file-size` 5MB / `max-request-size` 6MB, `server.tomcat.max-swallow-size` 10MB (lets Tomcat drain an oversized upload and still answer 413)
+- Object storage — `app.storage.*`, read from environment variables (no credentials in code):
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `STORAGE_BUCKET` | `bidflow-images` | Bucket name (created on startup if missing) |
+| `STORAGE_REGION` | `us-east-1` | Region |
+| `STORAGE_ENDPOINT` | `http://localhost:9090` | S3 endpoint the backend calls. **Empty = real AWS S3** |
+| `STORAGE_PUBLIC_ENDPOINT` | (empty = same as endpoint) | Host used in presigned URLs — must be reachable from the browser |
+| `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` | (empty) | Static keys. **Empty = AWS default credentials chain** (env, profile, IAM role) |
+| `STORAGE_PATH_STYLE` | `true` | Path-style URLs (needed by s3mock / MinIO; use `false` for AWS) |
+
+  To use AWS S3: set `STORAGE_BUCKET`, `STORAGE_REGION`, leave `STORAGE_ENDPOINT` / `STORAGE_PUBLIC_ENDPOINT` empty, `STORAGE_PATH_STYLE=false`, and provide credentials through an IAM role or env vars.
 
 7. Running locally
 1) Docker Compose (quickest): from repository root:
@@ -63,7 +80,9 @@ This README precisely reflects the current implementation in the `backend` sourc
 docker compose up --build
 ```
 
-This starts `postgres-db` (5432), `redis` (6379) and `backend` (8080). The `backend` service runs with `SPRING_PROFILES_ACTIVE=docker` and uses `application-docker.yaml` (DB host `postgres-db`, Redis host `redis`). The compose file mounts `init-scripts/schema.sql` into Postgres to initialize schema.
+This starts `postgres-db` (5432), `redis` (6379), `object-storage` (`adobe/s3mock:5.2.3`, 9090, files kept in volume `object_storage_data`) and `backend` (8080). The `backend` service runs with `SPRING_PROFILES_ACTIVE=docker` and uses `application-docker.yaml` (DB host `postgres-db`, Redis host `redis`) plus the `STORAGE_*` variables from compose. The compose file mounts `init-scripts/schema.sql` into Postgres to initialize schema.
+
+If those host ports are taken on your machine, put port overrides in a gitignored `docker-compose.local.yml` (e.g. `ports: !override ["5433:5432"]`) and run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`.
 
 2) Run without Docker:
 
@@ -85,12 +104,15 @@ Users
 - GET /api/users/me — Auth required. Response: `UserResponse` (id, username, email, fullName, walletBalance, createdAt).
 
 Auctions
-- POST /api/auctions — Auth required. Request: `CreateAuctionRequest`. Response: `AuctionResponse`. Returns 201 Created.
-- GET /api/auctions — Public. Optional query `status` (enum: DRAFT, ACTIVE, ENDED, CANCELLED), `page`, `size`. Response: paged `AuctionSummaryResponse`.
-- GET /api/auctions/my — Auth required. Query `page`, `size`. Response: paged `AuctionSummaryResponse`.
-- GET /api/auctions/{id} — Public. Response: `AuctionResponse`.
-- PUT /api/auctions/{id} — Auth required. Request: `UpdateAuctionRequest`. Response: `AuctionResponse`.
-- DELETE /api/auctions/{id} — Auth required. Returns 204 No Content.
+- POST /api/auctions — Auth required. Request: `CreateAuctionRequest`. Response: `AuctionResponse` (status `DRAFT`). Returns 201 Created.
+- GET /api/auctions — Public. Query `status` (`ACTIVE` or `ENDED`; omitted = both; anything else → 400), `q` (title/description, case-insensitive, ≤ 100 chars, `%` `_` `\` matched literally), `sort` (`newest` default, `endingSoon`, `priceAsc`, `priceDesc`, `mostBids`; anything else → 400), `page`, `size` (capped at 50). Response: paged `AuctionSummaryResponse` (… `startTime`, `primaryImageUrl`).
+- GET /api/auctions/my — Auth required. Query `page`, `size`. Response: paged `AuctionSummaryResponse` (all statuses).
+- GET /api/auctions/{id} — Public (token optional). Response: `AuctionResponse` with `images[]`. 404 for a missing auction and for someone else's DRAFT / CANCELLED (same response).
+- PUT /api/auctions/{id} — Auth required (owner, DRAFT). Request: `UpdateAuctionRequest`. Response: `AuctionResponse`.
+- DELETE /api/auctions/{id} — Auth required (owner, DRAFT → CANCELLED). Returns 204 No Content.
+- POST /api/auctions/{id}/publish — Auth required (owner). DRAFT → ACTIVE; 400 if not DRAFT or `endTime` has passed, 403 if not the owner. Returns 200 `AuctionResponse`.
+- POST /api/auctions/{id}/images — Auth required (owner, DRAFT). `multipart/form-data` part `file`: JPEG / PNG / WebP by content, ≤ 5 MB (413 above), ≤ 5 per auction. Returns 201 `AuctionImageResponse` (id, url, isPrimary, displayOrder).
+- DELETE /api/auctions/{id}/images/{imageId} — Auth required (owner, DRAFT). Deletes the object too; the next photo becomes primary. Returns 204.
 
 Bidding
 - POST /api/auctions/{auctionId}/bids — Auth required. Request: `PlaceBidRequest` (amount). Returns 201 Created `BidResponse` (id, auctionItemId, bidderId, bidderUsername, bidAmount, bidSequence, createdAt).
@@ -99,7 +121,9 @@ Bidding
     - Processing runs inside `TransactionTemplate.execute(...)` (programmatic transaction).
     - Steps in code: validate auction status/time; load bidder; prevent seller self-bid; compute min required (`currentPrice + minIncrement`); find previous highest bid; `walletService.release(previousHighest.bidder, previousHighest.bidAmount, auctionId)` if present; `walletservice.hold(bidder, amount, auctionId)`; create/save `Bid`; update auction `currentPrice` and `totalBids`; publish `BID_PLACED` event via `BidEventPublisher`.
     - The event is published inside the transaction scope (i.e., publish call occurs before the surrounding transaction completes in code).
+    - When someone else outbids the previous leader, a "You've been outbid" notification is created for that leader in the same transaction (raising your own bid creates none).
 - GET /api/auctions/{auctionId}/bids — Public. Query `page`, `size`. Response: paged `BidSummaryResponse`.
+- GET /api/bids/me — Auth required. Query `page`, `size` (capped at 50). One row per auction the user bid on, latest bid first: `MyBidResponse` (auctionId, title, status, currentPrice, endTime, myHighestBid, myBidCount, lastBidAt, result = LEADING | OUTBID | WON | LOST | CANCELLED, primaryImageUrl).
 
 Wallet
 - GET /api/wallet/me — Auth required. Response: `WalletResponse` (userId, username, walletBalance).
@@ -162,9 +186,13 @@ Notifications
 
 - Exception → HTTP mapping (from `GlobalExceptionHandler`):
   - `UserNotFoundException` → 404
+  - `AuctionNotFoundException` → 404
   - `NoResourceFoundException` → 404
   - `InsufficientBalanceException` → 400 (details include `currentBalance` and `requestedAmount`)
   - `MethodArgumentNotValidException` → 400 (validation details)
+  - `MethodArgumentTypeMismatchException` → 400 (e.g. `?status=FOO`)
+  - `MaxUploadSizeExceededException` → 413
+  - `MultipartException` / `MissingServletRequestPartException` → 400
   - `IllegalArgumentException` → 400
   - `BadCredentialsException` → 401
   - `AccessDeniedException` → 403
@@ -178,9 +206,11 @@ cd backend
 mvn test
 ```
 
+> ⚠️ The existing tests run against the configured database and clear its data — don't run them against a database you want to keep.
+
 15. Docker (files & run)
-- `backend/Dockerfile` is a two-stage Maven build and copies `target/*.jar` to runtime image; exposes 8080.
-- `docker-compose.yml` brings up `postgres-db` (postgres:16), `redis` (redis:7) and `backend` (build context `./backend`), mapping host ports 5432, 6379 and 8080 respectively. `backend` sets `SPRING_PROFILES_ACTIVE=docker`.
+- `backend/Dockerfile` is a two-stage Maven build and copies `target/*.jar` to runtime image; exposes 8080. Known issue: its `HEALTHCHECK` calls `/actuator/health`, which doesn't exist (no actuator) and is secured, so the container reports `unhealthy` even though the app works.
+- `docker-compose.yml` brings up `postgres-db` (postgres:16), `redis` (redis:7), `object-storage` (adobe/s3mock:5.2.3) and `backend` (build context `./backend`), mapping host ports 5432, 6379, 9090 and 8080 respectively. `backend` sets `SPRING_PROFILES_ACTIVE=docker` and the `STORAGE_*` variables (dev-only dummy keys — s3mock doesn't check them).
 
 16. Frontend integration guide (practical flow)
 1. Register
@@ -237,6 +267,8 @@ Note: `BidEvent` is published from within the same transactional scope as bid pr
 - Database schema: `spring.jpa.hibernate.ddl-auto: validate` — ensure schema matches entities. Use `init-scripts/schema.sql` in Docker Compose or apply migrations.
 - `app.jwt.secret` in `application.yaml` is a DEV placeholder. Do not check-in production secrets; set a secure Base64 secret via environment variables.
 - WebSocket allowed origins: `setAllowedOriginPatterns("*")` in `WebSocketConfig` (DEV only). Restrict origins in production.
+- Photos load in the backend but not in the browser: `STORAGE_PUBLIC_ENDPOINT` must be an address the browser can reach (in compose the backend uses `http://object-storage:9090`, the browser `http://localhost:9090`).
+- Log line `Storage: cannot reach bucket ...` at startup: the storage service is down or misconfigured; everything except photo upload keeps working.
 
 18. Development notes
 - Locking: `BidService` uses Redisson lock `auction:bid:{auctionId}` and `tryLock(3, TimeUnit.SECONDS)`.

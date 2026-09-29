@@ -9,10 +9,12 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface AuctionItemRepository extends JpaRepository<AuctionItem, Long> {
+public interface AuctionItemRepository extends JpaRepository<AuctionItem, Long>,
+        JpaSpecificationExecutor<AuctionItem> {
 
     Page<AuctionItem> findByStatus(AuctionStatus status, Pageable pageable);
 
