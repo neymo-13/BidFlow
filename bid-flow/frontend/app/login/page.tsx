@@ -20,16 +20,17 @@ import {
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useRedirectIfAuth } from "@/lib/hooks/use-auth";
 import { getErrorMessage } from "@/lib/http";
+import { safeRedirect } from "@/lib/redirect";
 
 function LoginForm() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 
-	const redirect = searchParams.get("redirect") || "/";
+	const redirect = safeRedirect(searchParams.get("redirect"));
 
 	const { login, isLoading, error, clearError } = useAuthStore();
 
-	useRedirectIfAuth();
+	useRedirectIfAuth(redirect);
 
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");

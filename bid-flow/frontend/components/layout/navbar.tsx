@@ -12,10 +12,14 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotificationBell } from "@/components/notification/notification-bell";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { formatCurrency } from "@/lib/format";
 import {
+	Bell,
 	Gavel,
+	HandCoins,
+	LayoutList,
 	Wallet,
 	LogOut,
 	User as UserIcon,
@@ -61,6 +65,9 @@ export function Navbar() {
 
 					{/* Right: Wallet, Actions, User */}
 					<div className="flex items-center gap-3">
+						{/* Always mounted so it can reset its polling state on logout */}
+						<NotificationBell />
+
 						{user ? (
 							<>
 								<Link href="/wallet" className="hidden md:inline-flex items-center gap-2 rounded-full px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-sm font-medium shadow-sm hover:shadow-md transition-all">
@@ -90,6 +97,17 @@ export function Navbar() {
 
 										<DropdownMenuSeparator />
 
+										{/* Top-bar links are hidden on small screens */}
+										<DropdownMenuItem onClick={() => router.push('/auctions')} className="rounded-md hover:bg-slate-50 transition-colors md:hidden">
+											<Gavel className="mr-2 h-4 w-4" />
+											Browse auctions
+										</DropdownMenuItem>
+
+										<DropdownMenuItem onClick={() => router.push('/auctions/create')} className="rounded-md hover:bg-slate-50 transition-colors md:hidden">
+											<PlusCircle className="mr-2 h-4 w-4" />
+											Sell an item
+										</DropdownMenuItem>
+
 										<DropdownMenuItem onClick={() => router.push('/profile')} className="rounded-md hover:bg-slate-50 transition-colors">
 											<UserIcon className="mr-2 h-4 w-4" />
 											Profile
@@ -100,9 +118,19 @@ export function Navbar() {
 											Wallet
 										</DropdownMenuItem>
 
+										<DropdownMenuItem onClick={() => router.push('/bids')} className="rounded-md hover:bg-slate-50 transition-colors">
+											<HandCoins className="mr-2 h-4 w-4" />
+											My Bids
+										</DropdownMenuItem>
+
 										<DropdownMenuItem onClick={() => router.push('/auctions/my')} className="rounded-md hover:bg-slate-50 transition-colors">
-											<PlusCircle className="mr-2 h-4 w-4" />
+											<LayoutList className="mr-2 h-4 w-4" />
 											My Auctions
+										</DropdownMenuItem>
+
+										<DropdownMenuItem onClick={() => router.push('/notifications')} className="rounded-md hover:bg-slate-50 transition-colors">
+											<Bell className="mr-2 h-4 w-4" />
+											Notifications
 										</DropdownMenuItem>
 
 										<DropdownMenuSeparator />
@@ -116,6 +144,10 @@ export function Navbar() {
 							</>
 						) : (
 							<>
+								<Link href="/auctions" className="px-2 py-2 text-sm font-medium text-slate-600 hover:text-blue-600 md:hidden">
+									Auctions
+								</Link>
+
 								<Button variant="ghost" className="rounded-lg text-slate-600 hover:text-blue-600 transition-colors" onClick={() => router.push('/login')}>
 									Sign in
 								</Button>

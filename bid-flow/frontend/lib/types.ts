@@ -56,6 +56,17 @@ export interface WalletTransaction {
 // =====================================================
 export type AuctionStatus = "DRAFT" | "ACTIVE" | "ENDED" | "CANCELLED";
 
+// Sort keys accepted by GET /api/auctions (anything else → 400)
+export type AuctionSort = "newest" | "endingSoon" | "priceAsc" | "priceDesc" | "mostBids";
+
+// url is a short-lived presigned URL (private bucket) — don't store it
+export interface AuctionImage {
+  id: number;
+  url: string;
+  isPrimary: boolean;
+  displayOrder: number;
+}
+
 export interface Auction {
   id: number;
   sellerId: number;
@@ -73,6 +84,7 @@ export interface Auction {
   totalBids: number;
   createdAt: string;
   updatedAt: string;
+  images: AuctionImage[]; // ordered by displayOrder, primary first
 }
 
 export interface AuctionSummary {
@@ -80,9 +92,16 @@ export interface AuctionSummary {
   title: string;
   currentPrice: number;
   status: AuctionStatus;
+  startTime: string;
   endTime: string;
   totalBids: number;
   sellerUsername: string;
+  primaryImageUrl: string | null;
+}
+
+export interface AuctionListFilters {
+  q?: string;
+  sort?: AuctionSort;
 }
 
 export interface CreateAuctionRequest {
@@ -126,6 +145,23 @@ export interface BidSummary {
   bidAmount: number;
   bidSequence: number;
   createdAt: string;
+}
+
+// ACTIVE → LEADING / OUTBID · ENDED → WON / LOST
+export type MyBidResult = "LEADING" | "OUTBID" | "WON" | "LOST" | "CANCELLED";
+
+// One row per auction the user has bid on (GET /api/bids/me)
+export interface MyBid {
+  auctionId: number;
+  title: string;
+  status: AuctionStatus;
+  currentPrice: number;
+  endTime: string;
+  myHighestBid: number;
+  myBidCount: number;
+  lastBidAt: string;
+  result: MyBidResult;
+  primaryImageUrl: string | null;
 }
 
 // =====================================================

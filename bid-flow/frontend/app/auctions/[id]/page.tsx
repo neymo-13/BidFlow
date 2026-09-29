@@ -7,8 +7,11 @@ import { Auction, BidEvent, BidSummary } from "@/lib/types";
 import { auctionApi, bidApi } from "@/lib/api";
 import { getErrorMessage } from "@/lib/http";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { formatCurrency, formatDateTime, timeRemaining } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { formatCurrency, formatDateTime, isUpcoming, timeRemaining, timeUntilStart } from "@/lib/format";
+import { AuctionThumb } from "@/components/auction/auction-card";
+import { PublishAuctionDialog } from "@/components/auction/publish-dialog";
+import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +24,10 @@ import {
 	User as UserIcon,
 	Trophy,
 	AlertCircle,
+	CalendarClock,
 	Loader2,
+	Pencil,
+	Rocket,
 	Wifi,
 	WifiOff,
 } from "lucide-react";
@@ -48,27 +54,38 @@ export default function AuctionDetailPage({
 	const [bidLoading, setBidLoading] = useState(false);
 	const [bidError, setBidError] = useState<string | null>(null);
 	const [bidSuccess, setBidSuccess] = useState(false);
+	const [publishOpen, setPublishOpen] = useState(false);
+	const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+
+	// Another auction opened in the same page instance → show the loader again
+	// (state adjusted during render instead of inside the effect)
+	const [loadedId, setLoadedId] = useState(auctionId);
+	if (loadedId !== auctionId) {
+		setLoadedId(auctionId);
+		setInitialLoading(true);
+		setError(null);
+	}
 
 	// =====================================================
-	// Load data
+	// Load data — state is only set in the promise callbacks (after the request finishes).
+	// isCurrent lets the caller drop a response that arrives after it moved on.
 	// =====================================================
 	const loadData = useCallback(
-		async (silent = false) => {
-			if (!silent) setInitialLoading(true);
-			setError(null);
-			try {
-				const [auctionRes, bidsRes] = await Promise.all([
-					auctionApi.getById(auctionId),
-					bidApi.getBids(auctionId, 0, 20),
-				]);
-				setAuction(auctionRes);
-				setBids(bidsRes.content);
-			} catch (e) {
-				setError(getErrorMessage(e));
-			} finally {
-				if (!silent) setInitialLoading(false);
-			}
-		},
+		(isCurrent: () => boolean = () => true) =>
+			Promise.all([auctionApi.getById(auctionId), bidApi.getBids(auctionId, 0, 20)]).then(
+				([auctionRes, bidsRes]) => {
+					if (!isCurrent()) return;
+					setAuction(auctionRes);
+					setBids(bidsRes.content);
+					setError(null);
+					setInitialLoading(false);
+				},
+				(e) => {
+					if (!isCurrent()) return;
+					setError(getErrorMessage(e));
+					setInitialLoading(false);
+				}
+			),
 		[auctionId]
 	);
 
@@ -76,7 +93,11 @@ export default function AuctionDetailPage({
 	// Initial load
 	// =====================================================
 	useEffect(() => {
-		loadData();
+		let current = true;
+		loadData(() => current);
+		return () => {
+			current = false;
+		};
 	}, [loadData]);
 
 	// =====================================================
@@ -121,7 +142,7 @@ export default function AuctionDetailPage({
 				description: `Winner: @${event.bidderUsername} — ${formatCurrency(event.amount)}`,
 			});
 			refreshUser();
-			loadData(true);
+			loadData(); // silent: the loader only shows before the first load
 		}
 	});
 
@@ -195,10 +216,16 @@ export default function AuctionDetailPage({
 	// =====================================================
 	// Derived values
 	// =====================================================
-	const isActive = auction.status === "ACTIVE";
+	// Published but bidding hasn't opened yet (the API rejects bids before startTime)
+	const isUpcomingActive = auction.status === "ACTIVE" && isUpcoming(auction.startTime);
+	const isActive = auction.status === "ACTIVE" && !isUpcomingActive;
 	const isEnded = auction.status === "ENDED";
+	const isDraft = auction.status === "DRAFT";
+	const isCancelled = auction.status === "CANCELLED";
 	const isSeller = user?.username === auction.sellerUsername;
-	const imageUrl = `https://picsum.photos/seed/auction-${auction.id}/800/600`;
+	// Selection is kept by id, so it survives a reload (image URLs are re-signed each time)
+	const images = auction.images ?? [];
+	const selectedImage = images.find((image) => image.id === selectedImageId) ?? images[0] ?? null;
 
 	const quickAmounts = [
 		auction.currentPrice + auction.minIncrement,
@@ -218,17 +245,61 @@ export default function AuctionDetailPage({
 				<span className="text-gray-900">{auction.title}</span>
 			</nav>
 
+			{/* Only the seller can open a draft / cancelled auction (the API returns 404 to others) */}
+			{isSeller && (isDraft || isCancelled) && (
+				<div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+					<p className="text-sm text-amber-800">
+						{isDraft
+							? "This auction is a draft — only you can see it. Publish it to start taking bids."
+							: "This auction was cancelled — only you can see it."}
+					</p>
+					{isDraft && (
+						<div className="flex shrink-0 gap-2">
+							<Link
+								href={`/auctions/${auction.id}/edit`}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								<Pencil />
+								Edit
+							</Link>
+							<Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setPublishOpen(true)}>
+								<Rocket />
+								Publish
+							</Button>
+						</div>
+					)}
+				</div>
+			)}
+
 			<div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 				{/* Left: Image + Description */}
 				<div className="lg:col-span-3">
 					<Card className="overflow-hidden">
-						<div className="aspect-[4/3] bg-gray-100">
-							<img
-								src={imageUrl}
-								alt={auction.title}
-								className="w-full h-full object-cover"
-							/>
+						<div className="aspect-4/3 bg-gray-100">
+							<AuctionThumb src={selectedImage?.url ?? null} alt={auction.title} />
 						</div>
+						{images.length > 1 && (
+							<div className="flex gap-2 overflow-x-auto px-3 pb-3">
+								{images.map((image, i) => {
+									const isSelected = image.id === selectedImage?.id;
+									return (
+										<button
+											key={image.id}
+											type="button"
+											onClick={() => setSelectedImageId(image.id)}
+											aria-label={`Show photo ${i + 1} of ${images.length}`}
+											aria-pressed={isSelected}
+											className={cn(
+												"h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-opacity",
+												isSelected ? "border-blue-600" : "border-transparent opacity-70 hover:opacity-100"
+											)}
+										>
+											<AuctionThumb src={image.url} alt="" />
+										</button>
+									);
+								})}
+							</div>
+						)}
 					</Card>
 
 					<Card className="mt-6">
@@ -253,6 +324,9 @@ export default function AuctionDetailPage({
 								<Badge className="bg-green-500 text-white shrink-0">
 									● LIVE
 								</Badge>
+							)}
+							{isUpcomingActive && (
+								<Badge className="bg-blue-500 text-white shrink-0">UPCOMING</Badge>
 							)}
 							{isEnded && (
 								<Badge className="bg-gray-700 text-white shrink-0">ENDED</Badge>
@@ -288,6 +362,12 @@ export default function AuctionDetailPage({
 										{timeRemaining(auction.endTime)}
 									</span>
 								)}
+								{isUpcomingActive && (
+									<span className="flex items-center gap-1 text-blue-600 font-medium">
+										<CalendarClock className="w-4 h-4" />
+										{timeUntilStart(auction.startTime)}
+									</span>
+								)}
 							</div>
 
 							{isEnded && auction.winnerUsername && (
@@ -318,6 +398,21 @@ export default function AuctionDetailPage({
 								</div>
 							) : null}
 						</>
+					)}
+
+					{/* Not open yet: no bid form until startTime (refresh once it has started) */}
+					{isUpcomingActive && (
+						<Card>
+							<CardContent className="flex items-start gap-3 pt-6">
+								<CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+								<div>
+									<p className="font-medium text-slate-900">Bidding hasn&apos;t started yet</p>
+									<p className="text-sm text-slate-500">
+										Opens {formatDateTime(auction.startTime)} · closes {formatDateTime(auction.endTime)}
+									</p>
+								</div>
+							</CardContent>
+						</Card>
 					)}
 
 					{/* Bid Form */}
@@ -476,6 +571,15 @@ export default function AuctionDetailPage({
 					</Card>
 				</div>
 			</div>
+
+			<PublishAuctionDialog
+				auction={publishOpen ? auction : null}
+				onClose={() => setPublishOpen(false)}
+				onPublished={() => {
+					setPublishOpen(false);
+					loadData();
+				}}
+			/>
 		</div>
 	);
 }

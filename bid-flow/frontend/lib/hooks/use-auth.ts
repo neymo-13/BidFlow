@@ -40,15 +40,17 @@ export function useRequireAuth() {
 }
 
 // =====================================================
-// Redirect to home if already logged in (for login/register pages)
+// Redirect away if already logged in (for login/register pages)
+// target must match where the page's submit handler navigates,
+// otherwise the two navigations race after login
 // =====================================================
-export function useRedirectIfAuth() {
+export function useRedirectIfAuth(target = "/") {
   const router = useRouter();
   const { user, isInitialized } = useAuthStore();
 
   useEffect(() => {
     if (isInitialized && user) {
-      router.push("/");
+      router.push(target);
     }
-  }, [user, isInitialized, router]);
+  }, [user, isInitialized, router, target]);
 }

@@ -1,6 +1,8 @@
 import { api } from "../http";
 import {
   Auction,
+  AuctionImage,
+  AuctionListFilters,
   AuctionStatus,
   AuctionSummary,
   CreateAuctionRequest,
@@ -12,10 +14,13 @@ export const auctionApi = {
   list: async (
     status?: AuctionStatus,
     page = 0,
-    size = 20
+    size = 20,
+    filters: AuctionListFilters = {}
   ): Promise<Page<AuctionSummary>> => {
     const params = new URLSearchParams();
     if (status) params.append("status", status);
+    if (filters.q) params.append("q", filters.q);
+    if (filters.sort) params.append("sort", filters.sort);
     params.append("page", String(page));
     params.append("size", String(size));
 
@@ -40,6 +45,28 @@ export const auctionApi = {
 
   cancel: async (id: number): Promise<void> => {
     await api.delete(`/api/auctions/${id}`);
+  },
+
+  // DRAFT → ACTIVE (owner only)
+  publish: async (id: number): Promise<Auction> => {
+    const res = await api.post<Auction>(`/api/auctions/${id}/publish`);
+    return res.data;
+  },
+
+  // DRAFT only · JPEG / PNG / WebP ≤ 5 MB · max 5 images
+  uploadImage: async (id: number, file: File): Promise<AuctionImage> => {
+    const form = new FormData();
+    form.append("file", file);
+    // Override the instance's JSON Content-Type: axios would otherwise turn FormData into JSON.
+    // With multipart/form-data axios lets the browser add the boundary itself.
+    const res = await api.post<AuctionImage>(`/api/auctions/${id}/images`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
+
+  deleteImage: async (id: number, imageId: number): Promise<void> => {
+    await api.delete(`/api/auctions/${id}/images/${imageId}`);
   },
 
   getMyAuctions: async (page = 0, size = 20): Promise<Page<AuctionSummary>> => {

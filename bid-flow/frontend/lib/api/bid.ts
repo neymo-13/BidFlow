@@ -1,5 +1,5 @@
 import { api } from "../http";
-import { Bid, BidSummary, Page } from "../types";
+import { Bid, BidSummary, MyBid, Page } from "../types";
 
 export const bidApi = {
   placeBid: async (auctionId: number, amount: number): Promise<Bid> => {
@@ -15,6 +15,12 @@ export const bidApi = {
     const res = await api.get<Page<BidSummary>>(
       `/api/auctions/${auctionId}/bids?page=${page}&size=${size}`
     );
+    return res.data;
+  },
+
+  // One row per auction I have bid on, most recent bid first (size ≤ 50)
+  getMyBids: async (page = 0, size = 20): Promise<Page<MyBid>> => {
+    const res = await api.get<Page<MyBid>>(`/api/bids/me?page=${page}&size=${size}`);
     return res.data;
   },
 };
