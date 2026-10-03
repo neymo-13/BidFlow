@@ -15,7 +15,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, badgeVariants } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import Odometer from "@/components/ui/odometer";
 import { toast } from "sonner";
 import { useAuctionWebSocket } from "@/lib/hooks/use-auction-websocket";
 import {
@@ -236,13 +236,12 @@ export default function AuctionDetailPage({
 
 	return (
 		<div className="container mx-auto px-4 py-6">
-			{/* Breadcrumb */}
-			<nav className="text-sm text-gray-500 mb-4">
-				<Link href="/" className="hover:text-blue-600">
+			<nav className="mb-4 text-sm text-slate-500">
+				<Link href="/" className="transition-colors hover:text-blue-600">
 					Auctions
 				</Link>
 				<span className="mx-2">/</span>
-				<span className="text-gray-900">{auction.title}</span>
+				<span className="text-slate-900">{auction.title}</span>
 			</nav>
 
 			{/* Only the seller can open a draft / cancelled auction (the API returns 404 to others) */}
@@ -271,11 +270,10 @@ export default function AuctionDetailPage({
 				</div>
 			)}
 
-			<div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-				{/* Left: Image + Description */}
+			<div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
 				<div className="lg:col-span-3">
-					<Card className="overflow-hidden">
-						<div className="aspect-4/3 bg-gray-100">
+					<Card className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-md">
+						<div className="aspect-4/3 bg-slate-100">
 							<AuctionThumb src={selectedImage?.url ?? null} alt={auction.title} />
 						</div>
 						{images.length > 1 && (
@@ -302,84 +300,100 @@ export default function AuctionDetailPage({
 						)}
 					</Card>
 
-					<Card className="mt-6">
-						<CardHeader>
-							<CardTitle>Description</CardTitle>
+					<Card className="mt-6 rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+						<CardHeader className="pb-3">
+							<CardTitle className="text-xl font-semibold text-slate-900">
+								Description
+							</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<p className="text-gray-700 whitespace-pre-wrap">
+						<CardContent className="pt-0">
+							<p className="whitespace-pre-wrap leading-relaxed text-slate-600">
 								{auction.description || "No description provided"}
 							</p>
 						</CardContent>
 					</Card>
 				</div>
 
-				{/* Right: Info + Bid */}
-				<div className="lg:col-span-2 space-y-4">
-					{/* Title + Status */}
-					<div>
+				<div className="space-y-4 lg:col-span-2">
+					<div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
 						<Link
 							href={`/auctions?category=${encodeURIComponent(auction.category.slug)}`}
 							className={cn(badgeVariants({ variant: "outline" }), "mb-2")}
 						>
 							{auction.category.name}
 						</Link>
-						<div className="flex items-start justify-between gap-2 mb-2">
-							<h1 className="text-2xl font-bold">{auction.title}</h1>
+						<div className="mb-2 flex items-start justify-between gap-3">
+							<h1 className="text-2xl font-bold tracking-tight text-slate-900">
+								{auction.title}
+							</h1>
 							{isActive && (
-								<Badge className="bg-green-500 text-white shrink-0">
-									● LIVE
+								<Badge className="shrink-0 border border-emerald-200 bg-emerald-50 text-emerald-700">
+									● Live
 								</Badge>
 							)}
 							{isUpcomingActive && (
-								<Badge className="bg-blue-500 text-white shrink-0">UPCOMING</Badge>
+								<Badge className="shrink-0 border border-blue-200 bg-blue-50 text-blue-700">
+									Upcoming
+								</Badge>
 							)}
 							{isEnded && (
-								<Badge className="bg-gray-700 text-white shrink-0">ENDED</Badge>
+								<Badge className="shrink-0 border border-slate-200 bg-slate-100 text-slate-700">
+									Ended
+								</Badge>
 							)}
 						</div>
 
-						<div className="flex items-center gap-2 text-sm text-gray-600">
-							<UserIcon className="w-4 h-4" />
+						<div className="flex items-center gap-2 text-sm text-slate-600">
+							<UserIcon className="h-4 w-4" />
 							<span>Seller: @{auction.sellerUsername}</span>
 						</div>
 					</div>
 
-					<Separator />
-
-					{/* Current Price */}
-					<Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-						<CardContent className="pt-6">
-							<p className="text-sm text-gray-600 mb-1">
-								{isEnded ? "Winning bid" : "Current bid"}
-							</p>
-							<p className="text-4xl font-bold text-blue-600 mb-2">
-								{formatCurrency(auction.currentPrice)}
-							</p>
-
-							<div className="flex items-center gap-4 text-sm text-gray-600">
-								<span className="flex items-center gap-1">
-									<TrendingUp className="w-4 h-4" />
-									{auction.totalBids} bids
-								</span>
+					<Card className="border border-slate-200/80 bg-gradient-to-br from-slate-50 to-blue-50/40 shadow-sm">
+						<CardContent className="space-y-4 p-6">
+							<div className="flex items-center justify-between gap-3">
+								<p className="text-sm font-medium uppercase tracking-[0.14em] text-slate-500">
+									{isEnded ? "Winning bid" : "Current bid"}
+								</p>
 								{isActive && (
-									<span className="flex items-center gap-1 text-orange-600 font-medium">
-										<Clock className="w-4 h-4" />
-										{timeRemaining(auction.endTime)}
-									</span>
-								)}
-								{isUpcomingActive && (
-									<span className="flex items-center gap-1 text-blue-600 font-medium">
-										<CalendarClock className="w-4 h-4" />
-										{timeUntilStart(auction.startTime)}
-									</span>
+									<div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+										<TrendingUp className="h-3.5 w-3.5" />
+										{auction.totalBids} bids
+									</div>
 								)}
 							</div>
 
+							<div className="flex items-center text-4xl font-extrabold tracking-tight text-blue-600">
+								<span className="mr-1">฿</span>
+								<Odometer value={auction.currentPrice} />
+							</div>
+
+							<div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+								{isUpcomingActive ? (
+									<span className="inline-flex items-center gap-1.5 font-medium text-blue-600">
+										<CalendarClock className="h-4 w-4" />
+										{timeUntilStart(auction.startTime)}
+									</span>
+								) : (
+									<span className="inline-flex items-center gap-1.5">
+										<Clock className="h-4 w-4 text-slate-500" />
+										{isActive
+											? timeRemaining(auction.endTime)
+											: isDraft
+												? "Not published yet"
+												: "Auction closed"}
+									</span>
+								)}
+								<span className="inline-flex items-center gap-1.5">
+									<Trophy className="h-4 w-4 text-slate-500" />
+									{auction.totalBids} total bids
+								</span>
+							</div>
+
 							{isEnded && auction.winnerUsername && (
-								<div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-									<p className="flex items-center gap-2 text-sm font-medium text-yellow-800">
-										<Trophy className="w-4 h-4" />
+								<div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+									<p className="flex items-center gap-2 text-sm font-medium text-amber-800">
+										<Trophy className="h-4 w-4" />
 										Winner: @{auction.winnerUsername}
 									</p>
 								</div>
@@ -387,28 +401,25 @@ export default function AuctionDetailPage({
 						</CardContent>
 					</Card>
 
-					{/* Your status */}
 					{user && isActive && bids.length > 0 && (
-						<>
+						<div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3">
 							{bids[0].bidderUsername === user.username ? (
-								<div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
-									<p className="text-green-700 font-medium">
-										You&apos;re winning!
-									</p>
-								</div>
+								<p className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+									<TrendingUp className="h-4 w-4" />
+									You&apos;re winning!
+								</p>
 							) : bids.some((b) => b.bidderUsername === user.username) ? (
-								<div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-									<p className="text-red-700 font-medium">
-										You&apos;ve been outbid!
-									</p>
-								</div>
+								<p className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700">
+									<AlertCircle className="h-4 w-4" />
+									You&apos;ve been outbid!
+								</p>
 							) : null}
-						</>
+						</div>
 					)}
 
 					{/* Not open yet: no bid form until startTime (refresh once it has started) */}
 					{isUpcomingActive && (
-						<Card>
+						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
 							<CardContent className="flex items-start gap-3 pt-6">
 								<CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
 								<div>
@@ -421,19 +432,18 @@ export default function AuctionDetailPage({
 						</Card>
 					)}
 
-					{/* Bid Form */}
 					{isActive && (
-						<Card>
-							<CardHeader>
-								<CardTitle className="text-base">Place Your Bid</CardTitle>
-								<p className="text-sm text-gray-500">
-									Minimum: {formatCurrency(minBid)}
-								</p>
+						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+							<CardHeader className="pb-3">
+								<CardTitle className="text-base font-semibold text-slate-900">
+									Place Your Bid
+								</CardTitle>
+								<p className="text-sm text-slate-500">Minimum: {formatCurrency(minBid)}</p>
 							</CardHeader>
-							<CardContent className="space-y-3">
+							<CardContent className="space-y-3 pt-0">
 								{!user ? (
 									<Button
-										className="w-full"
+										className="w-full bg-blue-600 text-white hover:bg-blue-700"
 										onClick={() =>
 											router.push(`/login?redirect=/auctions/${auctionId}`)
 										}
@@ -441,7 +451,7 @@ export default function AuctionDetailPage({
 										Sign in to Bid
 									</Button>
 								) : isSeller ? (
-									<div className="p-3 bg-gray-50 rounded text-center text-sm text-gray-600">
+									<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center text-sm text-slate-600">
 										You can&apos;t bid on your own auction
 									</div>
 								) : (
@@ -452,6 +462,7 @@ export default function AuctionDetailPage({
 													key={i}
 													variant="outline"
 													size="sm"
+													className="rounded-xl border-slate-200 bg-white font-semibold text-slate-700 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
 													onClick={() => setBidAmount(String(amount))}
 												>
 													{formatCurrency(amount)}
@@ -460,7 +471,7 @@ export default function AuctionDetailPage({
 										</div>
 
 										<div className="relative">
-											<span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+											<span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-500">
 												฿
 											</span>
 											<Input
@@ -469,30 +480,30 @@ export default function AuctionDetailPage({
 												value={bidAmount}
 												onChange={(e) => setBidAmount(e.target.value)}
 												min={minBid}
-												className="pl-7"
+												className="rounded-xl border-slate-200 bg-slate-50 pl-7 text-slate-900 shadow-sm focus-visible:ring-blue-500"
 											/>
 										</div>
 
 										{bidError && (
-											<div className="p-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded">
+											<div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">
 												{bidError}
 											</div>
 										)}
 
 										{bidSuccess && (
-											<div className="p-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded">
+											<div className="rounded-lg border border-green-200 bg-green-50 p-2 text-sm text-green-700">
 												Bid placed successfully!
 											</div>
 										)}
 
 										<Button
-											className="w-full bg-blue-600 hover:bg-blue-700"
+											className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.98]"
 											onClick={handlePlaceBid}
 											disabled={bidLoading || !bidAmount}
 										>
 											{bidLoading ? (
 												<>
-													<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+													<Loader2 className="mr-2 h-4 w-4 animate-spin" />
 													Placing bid...
 												</>
 											) : (
@@ -500,7 +511,7 @@ export default function AuctionDetailPage({
 											)}
 										</Button>
 
-										<p className="text-xs text-gray-500 text-center">
+										<p className="text-center text-xs text-slate-500">
 											Your balance: {formatCurrency(user.walletBalance || 0)}
 										</p>
 									</>
@@ -509,64 +520,52 @@ export default function AuctionDetailPage({
 						</Card>
 					)}
 
-					{/* Bid History */}
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-base flex items-center justify-between">
+					<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+						<CardHeader className="pb-3">
+							<CardTitle className="flex items-center justify-between text-base font-semibold text-slate-900">
 								<span>Bid History ({bids.length})</span>
 								<span
-									className={`flex items-center gap-1 text-xs font-normal ${isConnected ? "text-green-600" : "text-gray-400"
-										}`}
+									className={`inline-flex items-center gap-1 text-xs font-medium ${isConnected ? "text-emerald-600" : "text-slate-400"}`}
 								>
-									{isConnected ? (
-										<>
-											<Wifi className="w-3 h-3" />
-											Live
-										</>
-									) : (
-										<>
-											<WifiOff className="w-3 h-3" />
-											Offline
-										</>
-									)}
+									{isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+									{isConnected ? "Live" : "Offline"}
 								</span>
 							</CardTitle>
 						</CardHeader>
-						<CardContent>
+						<CardContent className="pt-0">
 							{bids.length === 0 ? (
-								<p className="text-sm text-gray-500 text-center py-4">
+								<p className="py-4 text-center text-sm text-slate-500">
 									No bids yet — be the first!
 								</p>
 							) : (
-								<div className="space-y-2 max-h-80 overflow-y-auto">
+								<div className="max-h-[250px] space-y-0 divide-y divide-slate-100 overflow-y-auto pr-1">
 									{bids.map((bid, i) => (
 										<div
 											key={bid.id}
-											className={`flex items-center justify-between p-2 rounded ${i === 0 ? "bg-blue-50 border border-blue-200" : ""
-												} ${bid.bidderUsername === user?.username
-													? "font-medium"
-													: ""
+											className={`flex items-center justify-between gap-3 p-3 ${bid.bidderUsername === user?.username
+													? "bg-blue-50/50"
+													: i % 2 === 0
+														? "bg-slate-50/50"
+														: "bg-white"
 												}`}
 										>
-											<div className="flex items-center gap-2">
-												<div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
+											<div className="flex items-center gap-2.5">
+												<div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
 													{bid.bidderUsername[0].toUpperCase()}
 												</div>
 												<div>
-													<p className="text-sm">
+													<p className="text-sm font-medium text-slate-700">
 														@{bid.bidderUsername}
 														{bid.bidderUsername === user?.username && (
-															<span className="text-blue-600 text-xs ml-1">
-																(you)
-															</span>
+															<span className="ml-1 text-xs font-semibold text-blue-600">(you)</span>
 														)}
 													</p>
-													<p className="text-xs text-gray-500">
+													<p className="text-xs text-slate-500">
 														{formatDateTime(bid.createdAt)}
 													</p>
 												</div>
 											</div>
-											<p className="text-sm font-semibold">
+											<p className="text-sm font-semibold text-slate-900">
 												{formatCurrency(bid.bidAmount)}
 											</p>
 										</div>
