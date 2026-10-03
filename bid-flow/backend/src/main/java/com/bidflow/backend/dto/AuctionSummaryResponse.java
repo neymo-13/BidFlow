@@ -13,5 +13,6 @@ public record AuctionSummaryResponse(
         OffsetDateTime endTime,
         Integer totalBids,
         String sellerUsername,
-        String primaryImageUrl      // null = ยังไม่มีรูป
+        String primaryImageUrl,     // null = ยังไม่มีรูป
+        CategoryResponse category
 ) {}

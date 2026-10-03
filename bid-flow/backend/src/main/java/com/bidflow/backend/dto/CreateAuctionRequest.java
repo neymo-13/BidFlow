@@ -27,5 +27,9 @@ public record CreateAuctionRequest(
 
         @NotNull(message = "End time is required")
         @Future(message = "End time must be in the future")
-        OffsetDateTime endTime
+        OffsetDateTime endTime,
+
+        // ต้องเป็นหมวดที่มีจริงและไม่ถูกซ่อน (ตรวจใน service)
+        @NotNull(message = "Category is required")
+        Long categoryId
 ) {}

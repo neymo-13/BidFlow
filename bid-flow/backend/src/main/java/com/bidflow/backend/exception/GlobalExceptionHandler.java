@@ -3,8 +3,12 @@ package com.bidflow.backend.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;   
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -12,6 +16,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -226,6 +231,65 @@ public class GlobalExceptionHandler {
 	}
 
 	// =====================================================
+	// 6.4 ไม่ได้ส่ง body / body ไม่ใช่ JSON ที่อ่านได้ → 400
+	//     ไม่ส่งข้อความของ parser กลับไป (มีชื่อ class / method ภายใน)
+	//     ถ้าไม่มีตัวนี้ ตัวจับทั่วไป (Exception) จะเปลี่ยนเป็น 500
+	// =====================================================
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ErrorResponse> handleNotReadable(
+			HttpMessageNotReadableException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				"Bad Request",
+				"Request body is missing or is not valid JSON",
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+	}
+
+	// =====================================================
+	// 6.5 method ที่ endpoint ไม่รองรับ → 405 (พร้อม header Allow)
+	// =====================================================
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+			HttpRequestMethodNotSupportedException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.METHOD_NOT_ALLOWED.value(),
+				"Method Not Allowed",
+				"Request method '" + ex.getMethod() + "' is not supported",
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).headers(ex.getHeaders()).body(error);
+	}
+
+	// =====================================================
+	// 6.6 Content-Type ที่ endpoint ไม่รองรับ → 415 (พร้อม header Accept)
+	// =====================================================
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+			HttpMediaTypeNotSupportedException ex,
+			HttpServletRequest request) {
+
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
+				"Unsupported Media Type",
+				"Content-Type is not supported by this endpoint",
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).headers(ex.getHeaders()).body(error);
+	}
+
+	// =====================================================
 	// 7. BadCredentialsException → 401 Unauthorized
 	// =====================================================
 	@ExceptionHandler(BadCredentialsException.class)
@@ -242,6 +306,28 @@ public class GlobalExceptionHandler {
 				null
 		);
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+	}
+
+	// =====================================================
+	// 7.1 ResponseStatusException → status ที่ระบุไว้ (เช่น 403 ถูกระงับ, 409 ซ้ำ/ใช้อยู่, 503 ยังไม่ได้ตั้งค่า)
+	//     ถ้าไม่มีตัวนี้ ตัวจับทั่วไป (Exception) จะเปลี่ยนเป็น 500
+	// =====================================================
+	@ExceptionHandler(ResponseStatusException.class)
+	public ResponseEntity<ErrorResponse> handleResponseStatus(
+			ResponseStatusException ex,
+			HttpServletRequest request) {
+
+		HttpStatusCode status = ex.getStatusCode();
+		HttpStatus known = HttpStatus.resolve(status.value());
+		ErrorResponse error = new ErrorResponse(
+				OffsetDateTime.now(),
+				status.value(),
+				known != null ? known.getReasonPhrase() : "Error",
+				ex.getReason(),
+				request.getRequestURI(),
+				null
+		);
+		return ResponseEntity.status(status).body(error);
 	}
 
 	// =====================================================

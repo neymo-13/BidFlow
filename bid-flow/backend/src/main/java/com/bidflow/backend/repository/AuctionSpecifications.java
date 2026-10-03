@@ -19,10 +19,17 @@ public final class AuctionSpecifications {
     }
 
     // status อยู่ใน statuses และ (ถ้ามี keyword) title หรือ description มี keyword แบบไม่สนตัวพิมพ์
-    public static Specification<AuctionItem> search(Collection<AuctionStatus> statuses, String keyword) {
+    // และ (ถ้ามี categoryId) อยู่ในหมวดนั้น
+    public static Specification<AuctionItem> search(
+            Collection<AuctionStatus> statuses, String keyword, Long categoryId) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(root.get("status").in(statuses));
+
+            if (categoryId != null) {
+                // เทียบกับ FK category_id โดยตรง ไม่ต้อง join ตาราง categories
+                predicates.add(cb.equal(root.get("category").get("id"), categoryId));
+            }
 
             if (keyword != null) {
                 String pattern = "%" + escapeLike(keyword.toLowerCase(Locale.ROOT)) + "%";

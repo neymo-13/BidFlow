@@ -48,9 +48,12 @@ public class SecurityConfig {
                 )
 				// เพิ่ม JwtAuthFilter ก่อน UsernamePasswordAuthenticationFilte
 				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-				// ไม่มี auth ให้คืน 401
+				// ไม่มี auth ให้คืน 401 · login แล้วแต่ไม่มีสิทธิ์ (เช่น USER เรียก /api/admin/**) ให้คืน 403
+				// ตั้ง status ตรงๆ ทั้งคู่ (ค่าเริ่มต้นของ 403 ใช้ sendError ซึ่งส่งต่อไป /error อีกรอบ)
 				.exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                        .accessDeniedHandler((request, response, denied) ->
+                                response.setStatus(HttpStatus.FORBIDDEN.value()))
                 )
                 .authorizeHttpRequests(auth -> auth
 						// Public: register/login
@@ -65,6 +68,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/auctions").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auctions/*").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auctions/*/bids").permitAll()
+
+						// หมวดหมู่ = public
+						.requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
+
+						// หน้าที่ของ admin ทั้งหมด (role อ่านจาก DB ใน JwtAuthFilter)
+						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         // ที่เหลือต้อง login
                         // .anyRequest().permitAll()      // ชั่วคราว

@@ -22,5 +22,6 @@ public record AuctionResponse(
         Integer totalBids,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
-        List<AuctionImageResponse> images      // เรียงตาม displayOrder · url เป็น presigned อายุสั้น
+        List<AuctionImageResponse> images,     // เรียงตาม displayOrder · url เป็น presigned อายุสั้น
+        CategoryResponse category
 ) {}

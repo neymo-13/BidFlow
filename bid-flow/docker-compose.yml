@@ -71,6 +71,12 @@ services:
       # Dummy dev-only keys: s3mock does not check credentials (same idea as the Postgres password above)
       STORAGE_ACCESS_KEY: dev-access-key
       STORAGE_SECRET_KEY: dev-secret-key
+      # First admin account + Google sign-in: real values go in .env next to this file (see .env.example).
+      # Empty ADMIN_USERNAME = no admin is created.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     depends_on:
       postgres-db:
         condition: service_healthy

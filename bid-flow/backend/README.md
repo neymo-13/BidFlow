@@ -14,7 +14,7 @@ This README precisely reflects the current implementation in the `backend` sourc
 ## Part 2 — Revised README.md (replaceable)
 
 1. Overview
-- Backend is a Spring Boot application that provides a real-time auction platform: user auth, auction CRUD, bidding with distributed locking, wallet ledger (hold/release/payout), notifications, STOMP WebSocket broadcasts, and a periodic auction settlement scheduler.
+- Backend is a Spring Boot application that provides a real-time auction platform: user auth (password or Google sign-in), auction CRUD with categories, bidding with distributed locking, wallet ledger (hold/release/payout), notifications, STOMP WebSocket broadcasts, a periodic auction settlement scheduler, and an admin API (categories, users, auctions, stats).
 
 2. Tech Stack
 - Java 21, Spring Boot (see `pom.xml`)
@@ -24,6 +24,8 @@ This README precisely reflects the current implementation in the `backend` sourc
 - Redisson (distributed locks) with Redis
 - JJWT (io.jsonwebtoken) for token handling
 - AWS SDK for Java v2 (`software.amazon.awssdk:s3`, BOM 2.55.6) for item photos in S3 or any S3-compatible store (dev uses `adobe/s3mock`)
+- Flyway 12 (`spring-boot-starter-flyway` + `flyway-database-postgresql`) for schema migrations after the initial schema
+- Spring Security OAuth2 JOSE (`spring-security-oauth2-jose`, Nimbus) to verify Google ID tokens
 - Docker / Docker Compose for quick local environment
 
 3. Architecture (high-level)
@@ -35,13 +37,20 @@ This README precisely reflects the current implementation in the `backend` sourc
 - Real-time: `BidEventPublisher` sends events to `/topic/auctions/{auctionId}` via `SimpMessagingTemplate`.
 - Visibility: `DRAFT` / `CANCELLED` auctions are visible to their seller only — `GET /api/auctions/{id}` answers 404 to anyone else, and `GET /api/auctions` lists `ACTIVE` / `ENDED` only.
 - Photos: `AuctionImageService` checks ownership + DRAFT, detects the type from the file's magic bytes (JPEG / PNG / WebP), stores it through `StorageService` under `auctions/{id}/{uuid}.{ext}` and records it in `item_images`. The bucket is private; responses carry presigned GET URLs valid for 60 minutes. `StorageService` creates the bucket when the app is ready and only logs a warning if storage is unreachable.
+- Categories: every auction has exactly one category (`auction_items.category_id`, required). `CategoryService` lists visible categories (name order, `Other` last), resolves the `?category=<slug>` filter, and lets admins add / rename / hide / delete them. Slugs are generated once from the name and never change. `Other` (slug `other`) can't be hidden or deleted. Hidden categories disappear from the public list, the filter and the create/edit forms, but auctions that already use them keep them.
+- Roles & suspension: `users.role` is `USER` or `ADMIN`, `users.suspended` blocks an account. `JwtAuthFilter` reloads the user on every request and takes the authorities from the database (`ROLE_` + role), so a role change or a suspension applies to existing tokens at once. `/api/admin/**` requires `ROLE_ADMIN`.
+- Admin: `AdminUserService` (search, suspend / unsuspend — admins can't be suspended), `AdminAuctionService` (cancel DRAFT / ACTIVE with a reason under the same Redisson lock as bidding: refunds the leading bid and notifies the seller and every bidder), `AdminStatsService` (dashboard numbers). Every admin action is logged at INFO with the admin's username.
+- First admin: `AdminBootstrap` (runs after `DataSeeder`) reads `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Existing username → promoted to ADMIN (password untouched). Otherwise a new admin is created (email required, password ≥ 8, email not used by someone else). Anything missing or invalid → logged and skipped; the app still starts. It never demotes anyone and never logs the password.
+- Google sign-in: the browser gets an ID token from Google Identity Services and posts it to `POST /api/auth/google`. `GoogleTokenVerifier` checks it against Google's public keys (JWKS, RS256) plus `iss`, `aud` = our Client ID, expiry and `email_verified`. `GoogleAuthService` matches the account by Google `sub`, then by email (links it), otherwise creates a new account without a password; the response is our own JWT, same as a password login. No client secret is involved.
+- Schema: `init-scripts/schema.sql` creates the initial schema (Flyway baseline version 1). Later changes are Flyway migrations in `src/main/resources/db/migration` (`V2__categories_roles_google.sql`: categories, `category_id`, role, suspended, `google_sub`, nullable `password_hash`). Flyway runs before Hibernate's `validate`.
 
 4. Project Structure (packages)
-- `controller` — REST controllers: `AuthController`, `UserController`, `AuctionController`, `BidController`, `MyBidController`, `WalletController`, `NotificationController`.
-- `service` — business logic: `AuthService`, `AuctionService`, `AuctionImageService`, `StorageService`, `BidService`, `WalletService`, `NotificationService`, `AuctionSettlementService`, `AuctionSettlementExecutor`, `BidEventPublisher`.
-- `dto` — request/response records (e.g., `PlaceBidRequest`, `BidResponse`, `AuctionResponse`, `BidEvent`).
-- `entity` / `repository` — JPA entities and Spring Data repositories.
-- `config` / `security` / `exception` — WebSocket, SecurityConfig, `StorageConfig` (S3 client + presigner), Jwt* classes, and `GlobalExceptionHandler`.
+- `controller` — REST controllers: `AuthController`, `UserController`, `CategoryController`, `AuctionController`, `BidController`, `MyBidController`, `WalletController`, `NotificationController`, and the admin controllers `AdminStatsController`, `AdminUserController`, `AdminAuctionController`, `AdminCategoryController`.
+- `service` — business logic: `AuthService`, `GoogleAuthService`, `CategoryService`, `AuctionService`, `AuctionImageService`, `StorageService`, `BidService`, `WalletService`, `NotificationService`, `AuctionSettlementService`, `AuctionSettlementExecutor`, `BidEventPublisher`, `AdminUserService`, `AdminAuctionService`, `AdminStatsService`.
+- `dto` — request/response records (e.g., `PlaceBidRequest`, `BidResponse`, `AuctionResponse`, `BidEvent`, `CategoryResponse`, `AdminUserResponse`).
+- `entity` / `repository` / `enums` — JPA entities (incl. `Category`), Spring Data repositories, enums (incl. `Role`).
+- `config` / `security` / `exception` — WebSocket, SecurityConfig, `StorageConfig` (S3 client + presigner), `DataSeeder`, `AdminBootstrap`, Jwt* classes, `GoogleTokenVerifier`, and `GlobalExceptionHandler`.
+- `src/main/resources/db/migration` — Flyway migrations (`V2__…`).
 
 5. Prerequisites
 - JDK 21
@@ -73,6 +82,17 @@ This README precisely reflects the current implementation in the `backend` sourc
 
   To use AWS S3: set `STORAGE_BUCKET`, `STORAGE_REGION`, leave `STORAGE_ENDPOINT` / `STORAGE_PUBLIC_ENDPOINT` empty, `STORAGE_PATH_STYLE=false`, and provide credentials through an IAM role or env vars.
 
+- Admin account and Google sign-in — `app.admin.*` / `app.google.client-id`, read from environment variables. With Docker Compose, put them in a `.env` file at the repository root (copy `.env.example`; `.env` is gitignored) — compose passes them to the backend:
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `ADMIN_USERNAME` | (empty = skip) | Username of the first admin. An existing user with this name is promoted |
+| `ADMIN_EMAIL` | (empty) | Email for a new admin (must not belong to another account) |
+| `ADMIN_PASSWORD` | (empty) | Password for a new admin, at least 8 characters (stored as bcrypt, never logged) |
+| `GOOGLE_CLIENT_ID` | (empty = Google sign-in off → `POST /api/auth/google` answers 503) | OAuth 2.0 Client ID (Web application) from Google Cloud Console. Not a secret. Must equal the frontend's `NEXT_PUBLIC_GOOGLE_CLIENT_ID` |
+
+- Flyway: `spring.flyway.baseline-on-migrate: true`, `baseline-version: 1` — an existing database created from `schema.sql` is baselined at version 1 and then migrated to V2 on the first start.
+
 7. Running locally
 1) Docker Compose (quickest): from repository root:
 
@@ -80,7 +100,11 @@ This README precisely reflects the current implementation in the `backend` sourc
 docker compose up --build
 ```
 
-This starts `postgres-db` (5432), `redis` (6379), `object-storage` (`adobe/s3mock:5.2.3`, 9090, files kept in volume `object_storage_data`) and `backend` (8080). The `backend` service runs with `SPRING_PROFILES_ACTIVE=docker` and uses `application-docker.yaml` (DB host `postgres-db`, Redis host `redis`) plus the `STORAGE_*` variables from compose. The compose file mounts `init-scripts/schema.sql` into Postgres to initialize schema.
+This starts `postgres-db` (5432), `redis` (6379), `object-storage` (`adobe/s3mock:5.2.3`, 9090, files kept in volume `object_storage_data`) and `backend` (8080). The `backend` service runs with `SPRING_PROFILES_ACTIVE=docker` and uses `application-docker.yaml` (DB host `postgres-db`, Redis host `redis`) plus the `STORAGE_*` variables from compose. The compose file mounts `init-scripts/schema.sql` into Postgres to initialize schema; on start the backend applies the Flyway migrations on top.
+
+Optional: create `.env` at the repository root from `.env.example` to create the first admin (`ADMIN_*`) and to enable Google sign-in (`GOOGLE_CLIENT_ID`), then `docker compose up -d backend` again.
+
+> Upgrading a database from before the categories / roles change: the first start migrates it (V2) — existing auctions get the `Other` category (the seeded demo items get matching categories), every user becomes `USER`, not suspended. Take a backup first (`docker exec auction-postgres pg_dump -U postgres auction_db > backup.sql`).
 
 If those host ports are taken on your machine, put port overrides in a gitignored `docker-compose.local.yml` (e.g. `ports: !override ["5433:5432"]`) and run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`.
 
@@ -92,23 +116,27 @@ mvn clean package
 java -jar target/*.jar
 ```
 
-Ensure PostgreSQL and Redis are reachable per `application.yaml`. Note: `spring.jpa.hibernate.ddl-auto: validate` — database schema must match JPA entities (use provided `init-scripts/schema.sql` or apply migrations before running).
+Ensure PostgreSQL and Redis are reachable per `application.yaml`. Note: `spring.jpa.hibernate.ddl-auto: validate` — database schema must match JPA entities. Create the database with `init-scripts/schema.sql`; Flyway applies the later migrations when the app starts.
 
 8. API reference (controllers and DTOs — exact shapes come from DTO records)
 
 Authentication
 - POST /api/auth/register — Request: `RegisterRequest` (username, email, password, fullName). Response: `AuthResponse` (token, tokenType="Bearer", userId, username, email, fullName). Returns 201 Created.
-- POST /api/auth/login — Request: `LoginRequest` (username, password). Response: `AuthResponse`. Returns 200 OK.
+- POST /api/auth/login — Request: `LoginRequest` (username, password). Response: `AuthResponse`. Returns 200 OK. Wrong password or an account without a password (Google-only) → 401 "Invalid username or password"; right password but suspended → 403 "Account suspended".
+- POST /api/auth/google — Request: `GoogleLoginRequest` (credential = Google ID token). Response: `AuthResponse`, 200 OK for an existing or a new account. 401 invalid token · 403 suspended · 409 email linked to another Google account · 503 `GOOGLE_CLIENT_ID` not set.
 
 Users
-- GET /api/users/me — Auth required. Response: `UserResponse` (id, username, email, fullName, walletBalance, createdAt).
+- GET /api/users/me — Auth required. Response: `UserResponse` (id, username, email, fullName, walletBalance, createdAt, role).
+
+Categories
+- GET /api/categories — Public. Visible categories `CategoryResponse` (id, name, slug), `Other` last.
 
 Auctions
-- POST /api/auctions — Auth required. Request: `CreateAuctionRequest`. Response: `AuctionResponse` (status `DRAFT`). Returns 201 Created.
-- GET /api/auctions — Public. Query `status` (`ACTIVE` or `ENDED`; omitted = both; anything else → 400), `q` (title/description, case-insensitive, ≤ 100 chars, `%` `_` `\` matched literally), `sort` (`newest` default, `endingSoon`, `priceAsc`, `priceDesc`, `mostBids`; anything else → 400), `page`, `size` (capped at 50). Response: paged `AuctionSummaryResponse` (… `startTime`, `primaryImageUrl`).
+- POST /api/auctions — Auth required. Request: `CreateAuctionRequest` (… `categoryId` required, must be a visible category). Response: `AuctionResponse` (status `DRAFT`). Returns 201 Created.
+- GET /api/auctions — Public. Query `status` (`ACTIVE` or `ENDED`; omitted = both; anything else → 400), `q` (title/description, case-insensitive, ≤ 100 chars, `%` `_` `\` matched literally), `sort` (`newest` default, `endingSoon`, `priceAsc`, `priceDesc`, `mostBids`; anything else → 400), `category` (slug of a visible category; unknown / hidden → 400), `page`, `size` (capped at 50). Response: paged `AuctionSummaryResponse` (… `startTime`, `primaryImageUrl`, `category`). The page's categories are loaded in one query.
 - GET /api/auctions/my — Auth required. Query `page`, `size`. Response: paged `AuctionSummaryResponse` (all statuses).
 - GET /api/auctions/{id} — Public (token optional). Response: `AuctionResponse` with `images[]`. 404 for a missing auction and for someone else's DRAFT / CANCELLED (same response).
-- PUT /api/auctions/{id} — Auth required (owner, DRAFT). Request: `UpdateAuctionRequest`. Response: `AuctionResponse`.
+- PUT /api/auctions/{id} — Auth required (owner, DRAFT). Request: `UpdateAuctionRequest` (optional `categoryId`; the current category is kept even if it was hidden meanwhile). Response: `AuctionResponse`.
 - DELETE /api/auctions/{id} — Auth required (owner, DRAFT → CANCELLED). Returns 204 No Content.
 - POST /api/auctions/{id}/publish — Auth required (owner). DRAFT → ACTIVE; 400 if not DRAFT or `endTime` has passed, 403 if not the owner. Returns 200 `AuctionResponse`.
 - POST /api/auctions/{id}/images — Auth required (owner, DRAFT). `multipart/form-data` part `file`: JPEG / PNG / WebP by content, ≤ 5 MB (413 above), ≤ 5 per auction. Returns 201 `AuctionImageResponse` (id, url, isPrimary, displayOrder).
@@ -135,12 +163,21 @@ Notifications
 - GET /api/notifications — Auth required. Query `page`, `size`. Response: paged `NotificationResponse`.
 - PUT /api/notifications/{id}/read — Auth required. Returns 204 No Content.
 
+Admin (role `ADMIN`; not logged in → 401, USER → 403) — details in `../API_DOCUMENTATION.md`
+- GET /api/admin/stats — `AdminStatsResponse` (totalUsers, suspendedUsers, adminUsers, auctionsByStatus, totalBids, totalSales).
+- GET /api/admin/users — Query `q`, `page`, `size` (≤ 50). Paged `AdminUserResponse`, newest first.
+- POST /api/admin/users/{id}/suspend · /unsuspend — 200 `AdminUserResponse`; 400 for admins, 404 unknown id.
+- GET /api/admin/auctions — Query `status` (any, omitted = all), `q`, `page`, `size`. Paged `AuctionSummaryResponse`.
+- POST /api/admin/auctions/{id}/cancel — Request `CancelAuctionRequest` (reason 1–500). 204; 400 unless DRAFT / ACTIVE; 409 while a bid is processed or the auction was just closed.
+- GET / POST /api/admin/categories · PATCH / DELETE /api/admin/categories/{id} — `AdminCategoryResponse` (id, name, slug, active, auctionCount). 409 duplicate name or category in use; 400 for `Other`.
+
 9. JWT Authentication (implementation)
 - `JwtService` creates and validates tokens using `app.jwt.secret` (Base64) and `app.jwt.expiration-ms`.
-- `JwtAuthFilter` reads `Authorization: Bearer <token>`, extracts username, loads user, calls `jwtService.isTokenValid(token, user)`, and if valid sets an Authentication with authority `ROLE_USER` in SecurityContext.
+- `JwtAuthFilter` reads `Authorization: Bearer <token>`, extracts username, loads the user, skips suspended users (the request continues unauthenticated → 401 on protected endpoints), calls `jwtService.isTokenValid(token, user)`, and if valid sets an Authentication whose authorities come from the user's role in the database (`ROLE_USER` / `ROLE_ADMIN`) — role claims in the token are not trusted.
 - Security rules (in `SecurityConfig`):
-  - `/api/auth/**` and GET `/api/auctions` and GET `/api/auctions/*` and GET `/api/auctions/*/bids` are permitted to all.
+  - `/api/auth/**` and GET `/api/auctions` and GET `/api/auctions/*` and GET `/api/auctions/*/bids` and GET `/api/categories` are permitted to all.
   - GET `/api/auctions/my` requires authentication.
+  - `/api/admin/**` requires `hasRole("ADMIN")` (access denied → 403 with an empty body).
   - WebSocket handshake path `/ws/**` is permitted to all.
   - All other requests require authentication.
 
@@ -149,7 +186,7 @@ Notifications
   - `DEPOSIT` — credits balance and records positive amount.
   - `WITHDRAW` — debits balance and records negative amount.
   - `BID_HOLD` — used when a bid is placed: subtracts `amount` from `walletBalance` and records a `BID_HOLD` transaction with negative `amount` and `referenceType=AUCTION_ITEM`.
-  - `BID_RELEASE` — used when a previous highest bidder is outbid: adds `amount` back to `walletBalance` and records `BID_RELEASE` transaction.
+  - `BID_RELEASE` — used when a previous highest bidder is outbid, or when an admin cancels an auction (description "Refund: auction X cancelled by admin"): adds `amount` back to `walletBalance` and records `BID_RELEASE` transaction.
   - `SELLER_PAYOUT` — created during settlement to credit the seller.
 - Important: although `TransactionType` enum contains `WIN_PAYMENT`, current code does not create `WIN_PAYMENT` transactions. Settlement credits the seller via `SELLER_PAYOUT`. The winner's funds are not recorded again at settlement (winner's amount was held earlier with `BID_HOLD`).
 
@@ -193,20 +230,31 @@ Notifications
   - `MethodArgumentTypeMismatchException` → 400 (e.g. `?status=FOO`)
   - `MaxUploadSizeExceededException` → 413
   - `MultipartException` / `MissingServletRequestPartException` → 400
+  - `HttpMessageNotReadableException` (no body / invalid JSON) → 400 "Request body is missing or is not valid JSON"
   - `IllegalArgumentException` → 400
   - `BadCredentialsException` → 401
   - `AccessDeniedException` → 403
+  - `ResponseStatusException` → its status and reason (used for 403 suspended, 404, 409 conflicts, 503 Google not configured)
+  - `HttpRequestMethodNotSupportedException` → 405 (with `Allow`)
+  - `HttpMediaTypeNotSupportedException` → 415 (with `Accept`)
   - Other exceptions → 500
 
 14. Testing
-- The repository contains `ConcurrentBiddingTest` (SpringBootTest) which tests concurrent bidding semantics (ensures concurrent attempts result in expected single-winner behavior under the lock). Run tests with:
+- Unit tests that need no database or Spring context (safe to run any time):
+  - `security/GoogleTokenVerifierTest` — signed test tokens: valid, wrong audience / issuer, expired, other key, unverified email, HS256 (alg confusion), unsigned, tampered payload.
+  - `service/GoogleAuthServiceTest` (Mockito) — account matching: new account, link by email, known Google account, suspended, email linked to another Google account, username taken, concurrent first sign-in.
 
 ```bash
 cd backend
-mvn test
+mvn test -Dtest='GoogleTokenVerifierTest,GoogleAuthServiceTest' -Dsurefire.failIfNoSpecifiedTests=false
+# or without a local JDK/Maven:
+docker run --rm -v "$PWD:/app" -v bidflow-m2:/root/.m2 -w /app maven:3.9-eclipse-temurin-21 \
+  mvn -q test -Dtest='GoogleTokenVerifierTest,GoogleAuthServiceTest' -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
-> ⚠️ The existing tests run against the configured database and clear its data — don't run them against a database you want to keep.
+- The older `ConcurrentBiddingTest` / `SettlementTest` (SpringBootTest) test concurrent bidding and settlement.
+
+> ⚠️ Those older tests run against the configured database and clear its data — don't run them against a database you want to keep. They also create auctions without a category, so they fail since categories became required and need updating first.
 
 15. Docker (files & run)
 - `backend/Dockerfile` is a two-stage Maven build and copies `target/*.jar` to runtime image; exposes 8080. Known issue: its `HEALTHCHECK` calls `/actuator/health`, which doesn't exist (no actuator) and is secured, so the container reports `unhealthy` even though the app works.
@@ -269,6 +317,15 @@ Note: `BidEvent` is published from within the same transactional scope as bid pr
 - WebSocket allowed origins: `setAllowedOriginPatterns("*")` in `WebSocketConfig` (DEV only). Restrict origins in production.
 - Photos load in the backend but not in the browser: `STORAGE_PUBLIC_ENDPOINT` must be an address the browser can reach (in compose the backend uses `http://object-storage:9090`, the browser `http://localhost:9090`).
 - Log line `Storage: cannot reach bucket ...` at startup: the storage service is down or misconfigured; everything except photo upload keeps working.
+- `POST /api/auth/google` answers 503 "Google sign-in is not configured": `GOOGLE_CLIENT_ID` is empty for the backend (root `.env` → `docker compose up -d backend`). 401 for a real Google login usually means the frontend and backend use different Client IDs.
+- Log line `AdminBootstrap: ADMIN_USERNAME is not set` at startup: no admin was created or promoted — expected until you set `ADMIN_*`.
+- Removing an admin: there is no API for it (and admins can't suspend admins). Use SQL: `update users set role = 'USER' where username = '...';` — takes effect on the next request.
+
+17a. Known limitations (security)
+- **Google sign-in links accounts by email (accepted risk).** Password sign-up does not verify email addresses, so someone could register with another person's email first; when that person later uses "Continue with Google", they are signed into the account the other party knows the password for (pre-account hijacking). Accepted for this project; the fix would be to verify emails on sign-up, or to disable the password of an account once Google is linked.
+- No rate limiting on `/api/auth/*`.
+- Login timing differs between an unknown username and a wrong password, so usernames can be guessed.
+- Wallet balance updates are read-modify-write without a row lock on `users`; two money operations of the same user at the same moment (e.g. a deposit during a bid on another auction) can lose one update.
 
 18. Development notes
 - Locking: `BidService` uses Redisson lock `auction:bid:{auctionId}` and `tryLock(3, TimeUnit.SECONDS)`.

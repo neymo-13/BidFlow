@@ -41,19 +41,20 @@ public class AuctionController {
     }
 
     // =====================================================
-    // 2. ดู auction ทั้งหมด (pagination + filter by status + ค้นหา + เรียง)
-    // GET /api/auctions?status=ACTIVE&q=leica&sort=priceAsc&page=0&size=20
+    // 2. ดู auction ทั้งหมด (pagination + filter by status / หมวด + ค้นหา + เรียง)
+    // GET /api/auctions?status=ACTIVE&category=cameras&q=leica&sort=priceAsc&page=0&size=20
     // sort: newest (default) | endingSoon | priceAsc | priceDesc | mostBids · size สูงสุด 50
     // =====================================================
     @GetMapping
     public Page<AuctionSummaryResponse> listAuctions(
             @RequestParam(required = false) AuctionStatus status,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) String category,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        return auctionService.listAuctions(status, q, sort, page, size);
+        return auctionService.listAuctions(status, q, category, sort, page, size);
     }
 
     // =====================================================

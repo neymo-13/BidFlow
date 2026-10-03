@@ -1,6 +1,7 @@
 package com.bidflow.backend.repository;
 
 import com.bidflow.backend.entity.Bid;
+import com.bidflow.backend.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -20,6 +22,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
 
     // หา bid ล่าสุดของ auction (highest)
     Optional<Bid> findFirstByAuctionItemIdOrderByBidAmountDesc(Long auctionItemId);
+
+    // คนที่เคยบิด auction นี้ (ไม่ซ้ำ) — ใช้แจ้งเตือนตอน admin ยกเลิก
+    @Query("select distinct b.bidder from Bid b where b.auctionItem.id = :auctionId")
+    List<User> findDistinctBiddersByAuctionId(@Param("auctionId") Long auctionId);
 
     // นับ bid ทั้งหมด
     long countByAuctionItemId(Long auctionItemId);

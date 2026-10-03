@@ -22,5 +22,9 @@ public record UpdateAuctionRequest(
         OffsetDateTime startTime,
 
         @Future
-        OffsetDateTime endTime
+        OffsetDateTime endTime,
+
+        // ไม่ส่ง = ไม่เปลี่ยนหมวด
+        @Positive
+        Long categoryId
 ) {}

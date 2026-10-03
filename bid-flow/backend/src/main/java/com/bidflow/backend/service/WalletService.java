@@ -237,6 +237,17 @@ public class WalletService {
 			BigDecimal amount,
 			Long auctionItemId
 	) {
+		return release(user, amount, auctionItemId, "Release from outbid on auction " + auctionItemId);
+	}
+
+	// Release เงินพร้อมระบุเหตุผลที่แสดงในประวัติ wallet (เช่น admin ยกเลิก auction)
+	@Transactional
+	public WalletTransaction release(
+			User user,
+			BigDecimal amount,
+			Long auctionItemId,
+			String description
+	) {
 		BigDecimal newBalance = user.getWalletBalance().add(amount);
 		user.setWalletBalance(newBalance);
 
@@ -247,7 +258,7 @@ public class WalletService {
 				.type(TransactionType.BID_RELEASE)
 				.referenceType(ReferenceType.AUCTION_ITEM)
 				.referenceId(auctionItemId)
-				.description("Release from outbid on auction " + auctionItemId)
+				.description(description)
 				.build();
 
 		walletTransactionRepository.save(tx);

@@ -2,9 +2,11 @@ package com.bidflow.backend.service;
 
 import com.bidflow.backend.dto.AuctionResponse;
 import com.bidflow.backend.dto.AuctionSummaryResponse;
+import com.bidflow.backend.dto.CategoryResponse;
 import com.bidflow.backend.dto.CreateAuctionRequest;
 import com.bidflow.backend.dto.UpdateAuctionRequest;
 import com.bidflow.backend.entity.AuctionItem;
+import com.bidflow.backend.entity.Category;
 import com.bidflow.backend.entity.User;
 import com.bidflow.backend.enums.AuctionStatus;
 import com.bidflow.backend.exception.AuctionNotFoundException;
@@ -25,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +53,7 @@ public class AuctionService {
     private final AuctionItemRepository auctionItemRepository;
     private final UserRepository userRepository;
     private final AuctionImageService auctionImageService;
+    private final CategoryService categoryService;
 
     // =====================================================
     // 1. สร้าง auction ใหม่
@@ -66,9 +70,13 @@ public class AuctionService {
             throw new IllegalArgumentException("End time must be after start time");
         }
 
+        // 2.1) หมวดต้องมีจริงและไม่ถูกซ่อน
+        Category category = categoryService.getSelectableCategory(request.categoryId());
+
         // 3) สร้าง auction
         AuctionItem auction = AuctionItem.builder()
                 .seller(seller)
+                .category(category)
                 .title(request.title())
                 .description(request.description())
                 .startPrice(request.startPrice())
@@ -103,11 +111,13 @@ public class AuctionService {
     // =====================================================
     // 3. ดู list auctions (pagination + filter + ค้นหา + เรียง)
     //    แสดงเฉพาะ ACTIVE / ENDED — ไม่ส่ง status = ทั้งสองสถานะ
+    //    category = slug ของหมวดที่แสดงอยู่ (ไม่ส่ง = ทุกหมวด)
     // =====================================================
     @Transactional(readOnly = true)
     public Page<AuctionSummaryResponse> listAuctions(
             AuctionStatus status,
             String keyword,
+            String category,
             String sort,
             int page,
             int size) {
@@ -117,10 +127,11 @@ public class AuctionService {
         }
 
         Set<AuctionStatus> statuses = status != null ? EnumSet.of(status) : PUBLIC_STATUSES;
+        Long categoryId = categoryService.resolveFilterSlug(category);
         Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), resolveSort(sort));
 
-        return toSummaryPage(auctionItemRepository
-                .findAll(AuctionSpecifications.search(statuses, normalizeKeyword(keyword)), pageable));
+        return toSummaryPage(auctionItemRepository.findAll(
+                AuctionSpecifications.search(statuses, normalizeKeyword(keyword), categoryId), pageable));
     }
 
     // =====================================================
@@ -164,6 +175,11 @@ public class AuctionService {
         }
         if (request.endTime() != null) {
             auction.setEndTime(request.endTime());
+        }
+        // ส่งหมวดเดิมมา (แม้ถูกซ่อนไปแล้ว) = ไม่เปลี่ยน · หมวดใหม่ต้องเลือกได้
+        if (request.categoryId() != null
+                && !request.categoryId().equals(auction.getCategory().getId())) {
+            auction.setCategory(categoryService.getSelectableCategory(request.categoryId()));
         }
 
         // 4) Validate: endTime > startTime หลัง update
@@ -237,6 +253,24 @@ public class AuctionService {
     }
 
     // =====================================================
+    // 7. Admin: auction ทุก status (รวม DRAFT / CANCELLED ของทุกคน) — ใหม่สุดก่อน
+    //    สิทธิ์ ADMIN ตรวจที่ SecurityConfig (/api/admin/**)
+    // =====================================================
+    @Transactional(readOnly = true)
+    public Page<AuctionSummaryResponse> listForAdmin(
+            AuctionStatus status,
+            String keyword,
+            int page,
+            int size) {
+
+        Set<AuctionStatus> statuses = status != null ? EnumSet.of(status) : EnumSet.allOf(AuctionStatus.class);
+        Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), SORTS.get(DEFAULT_SORT));
+
+        return toSummaryPage(auctionItemRepository.findAll(
+                AuctionSpecifications.search(statuses, normalizeKeyword(keyword), null), pageable));
+    }
+
+    // =====================================================
     // Helper methods
     // =====================================================
 
@@ -290,18 +324,24 @@ public class AuctionService {
                 a.getTotalBids(),
                 a.getCreatedAt(),
                 a.getUpdatedAt(),
-                auctionImageService.getImages(a.getId())
+                auctionImageService.getImages(a.getId()),
+                categoryService.toResponse(a.getCategory())
         );
     }
 
-    // ดึง URL รูปหลักของทั้งหน้าใน query เดียว แล้วค่อยแปลงแต่ละแถว
+    // ดึง URL รูปหลักและหมวดของทั้งหน้าอย่างละ query เดียว แล้วค่อยแปลงแต่ละแถว
+    // (getCategory().getId() อ่าน id จาก proxy ได้โดยไม่ query เพิ่ม)
     private Page<AuctionSummaryResponse> toSummaryPage(Page<AuctionItem> auctions) {
         Map<Long, String> imageUrls = auctionImageService.getPrimaryImageUrls(
                 auctions.map(AuctionItem::getId).getContent());
-        return auctions.map(a -> toSummary(a, imageUrls.get(a.getId())));
+        Map<Long, CategoryResponse> categories = categoryService.getResponsesByIds(
+                auctions.stream().map(a -> a.getCategory().getId()).collect(Collectors.toSet()));
+        return auctions.map(a -> toSummary(
+                a, imageUrls.get(a.getId()), categories.get(a.getCategory().getId())));
     }
 
-    private AuctionSummaryResponse toSummary(AuctionItem a, String primaryImageUrl) {
+    private AuctionSummaryResponse toSummary(
+            AuctionItem a, String primaryImageUrl, CategoryResponse category) {
         return new AuctionSummaryResponse(
                 a.getId(),
                 a.getTitle(),
@@ -311,7 +351,8 @@ public class AuctionService {
                 a.getEndTime(),
                 a.getTotalBids(),
                 a.getSeller().getUsername(),
-                primaryImageUrl
+                primaryImageUrl,
+                category
         );
     }
 }

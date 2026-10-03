@@ -9,10 +9,12 @@ import com.bidflow.backend.exception.UserNotFoundException;
 import com.bidflow.backend.repository.UserRepository;
 import com.bidflow.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 
@@ -76,9 +78,15 @@ public class AuthService {
         User user = userRepository.findByUsername(request.username())
                 .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
-        // เช็ค password
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        // เช็ค password (บัญชีที่สมัครผ่าน Google ไม่มีรหัสผ่าน → ข้อความเดียวกับรหัสผิด)
+        if (user.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BadCredentialsException("Invalid username or password");
+        }
+
+        // ถูกระงับ — ตรวจหลังรหัสผ่าน คนที่ไม่รู้รหัสจะไม่รู้ว่าบัญชีนี้ถูกระงับ
+        if (user.isSuspended()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account suspended");
         }
 
         // Generate JWT
@@ -108,7 +116,8 @@ public class AuthService {
                 user.getEmail(),
                 user.getFullName(),
                 user.getWalletBalance(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.getRole()
         );
     }
 }

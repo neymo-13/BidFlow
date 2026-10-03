@@ -1,9 +1,11 @@
 package com.bidflow.backend.config;
 
 import com.bidflow.backend.entity.AuctionItem;
+import com.bidflow.backend.entity.Category;
 import com.bidflow.backend.entity.User;
 import com.bidflow.backend.enums.AuctionStatus;
 import com.bidflow.backend.repository.AuctionItemRepository;
+import com.bidflow.backend.repository.CategoryRepository;
 import com.bidflow.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final AuctionItemRepository auctionItemRepository;
+    private final CategoryRepository categoryRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -49,11 +52,14 @@ public class DataSeeder implements CommandLineRunner {
 
         // =====================================================
         // 2. Create Auctions (ACTIVE)
+        //    หมวดถูกสร้างไว้แล้วโดย Flyway (V2) ซึ่งรันก่อน seeder เสมอ
         // =====================================================
         OffsetDateTime now = OffsetDateTime.now();
+        Category electronics = category("electronics");
 
         AuctionItem iphone = createAuction(
                 bob,
+                electronics,
                 "iPhone 15 Pro Max",
                 "Brand new, sealed in box. 256GB, Titanium Blue. " +
                         "Full warranty. Ships within 24 hours.",
@@ -65,6 +71,7 @@ public class DataSeeder implements CommandLineRunner {
 
         AuctionItem macbook = createAuction(
                 bob,
+                electronics,
                 "MacBook Pro M3 14\"",
                 "M3 Pro chip, 18GB RAM, 512GB SSD. Space Black. " +
                         "Battery cycle count: 12. AppleCare+ until 2027.",
@@ -76,6 +83,7 @@ public class DataSeeder implements CommandLineRunner {
 
         AuctionItem airpods = createAuction(
                 bob,
+                electronics,
                 "AirPods Pro 2nd Gen",
                 "USB-C version. Sealed. Active Noise Cancellation. " +
                         "Adaptive Audio. Perfect for commute and workout.",
@@ -87,6 +95,7 @@ public class DataSeeder implements CommandLineRunner {
 
         AuctionItem rolex = createAuction(
                 bob,
+                category("watches"),
                 "Rolex Submariner Date",
                 "Pre-owned, excellent condition. 2019 model. " +
                         "Original box and papers included. Recently serviced.",
@@ -98,6 +107,7 @@ public class DataSeeder implements CommandLineRunner {
 
         AuctionItem vintage = createAuction(
                 bob,
+                category("cameras"),
                 "Vintage Leica M3 Camera",
                 "1954 production. Fully functional. Recently CLA'd. " +
                         "Collector's item. Comes with original leather case.",
@@ -134,8 +144,14 @@ public class DataSeeder implements CommandLineRunner {
         return userRepository.save(user);
     }
 
+    private Category category(String slug) {
+        return categoryRepository.findBySlug(slug)
+                .orElseThrow(() -> new IllegalStateException("Missing category '" + slug + "' — check Flyway V2"));
+    }
+
     private AuctionItem createAuction(
             User seller,
+            Category category,
             String title,
             String description,
             BigDecimal startPrice,
@@ -145,6 +161,7 @@ public class DataSeeder implements CommandLineRunner {
     ) {
         AuctionItem auction = AuctionItem.builder()
                 .seller(seller)
+                .category(category)
                 .title(title)
                 .description(description)
                 .startPrice(startPrice)

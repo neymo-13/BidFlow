@@ -32,6 +32,11 @@ public class AuctionItem {
     @JoinColumn(name = "winner_id")
     private User winner;
 
+    // หมวดหมู่ (FK -> categories.id) - auction ละ 1 หมวด บังคับ
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
+
     @Column(name = "title", nullable = false, length = 150)
     private String title;
 

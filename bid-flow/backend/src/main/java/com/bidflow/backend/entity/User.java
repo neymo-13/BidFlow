@@ -1,5 +1,6 @@
 package com.bidflow.backend.entity;
 
+import com.bidflow.backend.enums.Role;
 import jakarta.persistence.*;          // annotation หลักของ JPA
 import lombok.*;                       // @Getter @Setter etc.
 import java.math.BigDecimal;           // type สำหรับเงิน (ไม่ใช้ double!)
@@ -33,7 +34,8 @@ public class User implements UserDetails {
 	@Column(name = "email", nullable = false, unique = true, length = 100)
 	private String email;
 
-	@Column(name = "password_hash", nullable = false, length = 255)
+	// null = บัญชีที่สมัครผ่าน Google (ไม่มีรหัสผ่าน)
+	@Column(name = "password_hash", length = 255)
 	private String passwordHash;
 	// camelCase ใน Java — Hibernate แปลง _ → ตัวใหญ่ให้
 
@@ -42,6 +44,20 @@ public class User implements UserDetails {
 
 	@Column(name = "wallet_balance", nullable = false, precision = 15, scale = 2) // หลักรวม, ทศนิยม (เท่ากับ DECIMAL(15,2))
 	private BigDecimal walletBalance;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "role", nullable = false, length = 20)
+	@Builder.Default
+	private Role role = Role.USER;
+
+	// ถูกระงับโดย admin → login / ใช้ token เดิมไม่ได้
+	@Column(name = "suspended", nullable = false)
+	@Builder.Default
+	private boolean suspended = false;
+
+	// Google "sub" (รหัสผู้ใช้ถาวรของ Google) — null = ยังไม่เคยเชื่อม Google
+	@Column(name = "google_sub", unique = true, length = 255)
+	private String googleSub;
 
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
@@ -53,7 +69,7 @@ public class User implements UserDetails {
 
 	@Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
     
     @Override

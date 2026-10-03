@@ -10,14 +10,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -56,13 +54,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 				// 5. โหลด user จาก DB
 				User user = userRepository.findByUsername(username).orElse(null);
 
-				if (user != null && jwtService.isTokenValid(token, user)) {
+				// ผู้ใช้ที่ถูกระงับ: ไม่ยืนยันตัวตน → endpoint ที่ต้อง login ได้ 401 ทันที (ไม่ต้องรอ token หมดอายุ)
+				if (user != null && user.isSuspended()) {
+					log.debug("Rejected token of suspended user: {}", username);
+				} else if (user != null && jwtService.isTokenValid(token, user)) {
 					// 6. สร้าง Authentication object
-					var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+					//    role มาจาก DB ทุก request (ไม่เชื่อ claim ใน token) → เปลี่ยน role แล้วมีผลทันที
 					var authToken = new UsernamePasswordAuthenticationToken(
-							user.getUsername(),   // principal (ใคร)
+							user.getUsername(),    // principal (ใคร)
 							null,                  // credentials (ไม่ต้องใส่แล้ว)
-							authorities            // roles/permissions
+							user.getAuthorities()  // ROLE_USER / ROLE_ADMIN
 					);
 					authToken.setDetails(
 							new WebAuthenticationDetailsSource().buildDetails(request)
