@@ -10,7 +10,7 @@
 - รอบที่ 2 (Build เสร็จ): ซ่อน DRAFT, ค้นหา/เรียง, Publish, My Bids, แจ้งเตือนโดนแซง, อัปโหลดรูปขึ้น object storage (s3mock ตอน dev / AWS S3 ด้วย env) — backend R2-B1…B9 + frontend R2-F1…F6 + R2-V (docs/traceability.md)
 - คำถามค้าง: ไม่มี (`localhost:8081` ใช้ได้แล้วหลัง Docker เปิดใหม่ 2026-09-29 — D-028)
 - รอบที่ 3: requirement v4 + design v3 อนุมัติแล้ว (design.md หัวข้อ 12, 23 Units) · ผู้ใช้ต้องสร้าง Google OAuth Client ID เอง (ใช้ตอน R3-F8)
-- Git: งานรอบ 1–3 commit บน `feat/ai-dlc-build` แล้ว merge กับงานของทีมบน `origin/main` (odometer ราคา + ลบ `backend/Mynote.md`) → `main` fast-forward และ push ขึ้น `github.com/neymo-13/BidFlow` ตามคำสั่งผู้ใช้ (2026-10-03, D-047) · ไฟล์ skill ที่ root ไม่ได้ commit
+- Git: งานรอบ 1–3 commit บน `feat/ai-dlc-build` แล้ว merge กับงานของทีมบน `origin/main` (odometer ราคา + ลบ `backend/Mynote.md`) → `main` fast-forward และ push ขึ้น `github.com/neymo-13/BidFlow` ตามคำสั่งผู้ใช้ (2026-10-03, D-047) · `ai_dlc_loop_skill.md` (skill ที่ใช้คุมงาน) push ขึ้นด้วยตามคำสั่งผู้ใช้
 - ข้อมูลของผู้ใช้ใน DB dev (อย่าแตะ): admin `Supanut` (จาก `.env`), หมวด "Book" (slug `books`) ที่ผู้ใช้เพิ่มเองตอนทดสอบ
 - R3-B1 ผ่าน (2026-09-29): DB dev migrate เป็น Flyway v2 แล้ว ข้อมูลครบ · backup ก่อน migrate: scratchpad `r3/backup-before-r3.sql`
 - R3-B2 ผ่าน (entity) · R3-B3 ผ่าน (`GET /api/categories`) · R3-B4 ผ่าน (API สร้าง auction ใช้ได้อีกครั้ง — ต้องส่ง `categoryId`) · R3-B5 ผ่าน (`?category=`)
