@@ -3,16 +3,34 @@
 - Skill: AI-DLC + Loop Engineering (`ai_dlc_loop_skill.md`) ตั้งแต่ 2026-09-28 (D-010)
 - Profile: W2 (Next.js 16 frontend) + B1 (Spring Boot backend) ตั้งแต่รอบที่ 2 · Autonomy: Standard (D-011) · โหมด: Working [ASSUMED] · Preset: ไม่ใช้
 - สถานะ: Brownfield (มีโค้ดอยู่แล้ว — Auth, Auction, Bidding real-time, Wallet API, Settlement, Notification API)
-- เฟสปัจจุบัน: Build (รอบที่ 3 — Category, Admin, Google sign-in) · Unit: 0/23 · สถานะ: กำลังทำ R3-B1 · Build รอบที่ 2 ครบ 16/16 แต่ GATE 3 ของรอบ 1–2 ยังไม่ได้ทดสอบใน browser
+- เฟสปัจจุบัน: **GATE 3** (รอบที่ 3 — Category, Admin, Google sign-in) · Unit: 23/23 (Build ครบ) · สถานะ: รอผู้ใช้ทดสอบใน browser — รวม GATE 3 ของรอบ 1–2 ที่ยังค้าง
+- ก่อนทดสอบหน้า admin: **ไม่มี admin ในระบบแล้ว** (`qa_admin` เป็น USER ตาม DS-25) → ผู้ใช้ตั้ง `ADMIN_*` ใน `.env` ที่ root แล้ว `docker compose ... up -d backend` · Google: ตั้ง Client ID ทั้ง `frontend/.env.local` และ `.env` ที่ root (ขั้นตอนใน `frontend/README.md`)
 - Gate ที่ผ่านแล้ว: GATE 1 — requirement v2 (2026-09-27) · GATE 2 — design v1 (2026-09-27) · requirement v3 (Change Control, 2026-09-27) · GATE 2 — design v2 (2026-09-28) · GATE 1 — requirement v4 (2026-09-28, เชื่อมบัญชีแบบ (a)) · GATE 2 — design v3 (2026-09-29, Autonomy Standard)
 - รอบที่ 1 (เสร็จ, ยังไม่ผ่าน GATE 3): frontend ของ Wallet, Create Auction, My Auctions, Notifications, Profile, `/auctions` — U0–U8
 - รอบที่ 2 (Build เสร็จ): ซ่อน DRAFT, ค้นหา/เรียง, Publish, My Bids, แจ้งเตือนโดนแซง, อัปโหลดรูปขึ้น object storage (s3mock ตอน dev / AWS S3 ด้วย env) — backend R2-B1…B9 + frontend R2-F1…F6 + R2-V (docs/traceability.md)
-- คำถามค้าง: `localhost:8081` (→ `::1`) ค้างเพราะ `wslrelay` ของ docker-desktop ค้าง (`127.0.0.1:8081` ปกติ) — ผู้ใช้ให้ restart Docker Desktop ตอนท้ายสุด (ตอนนี้) → หลัง restart ให้ AI ตรวจ `localhost` + ทดลอง bind `127.0.0.1` ใน `docker-compose.local.yml` กันเกิดซ้ำ
+- คำถามค้าง: ไม่มี (`localhost:8081` ใช้ได้แล้วหลัง Docker เปิดใหม่ 2026-09-29 — D-028)
 - รอบที่ 3: requirement v4 + design v3 อนุมัติแล้ว (design.md หัวข้อ 12, 23 Units) · ผู้ใช้ต้องสร้าง Google OAuth Client ID เอง (ใช้ตอน R3-F8)
-- Git: งานรอบ 1–2 commit แล้วบน branch `feat/ai-dlc-build` (ยังไม่ push, ไม่แตะ `main`) · ไฟล์ skill 3 ไฟล์ที่ root ไม่ได้ commit
-- ขั้นตอนถัดไป: R3-B1 — เตรียมไฟล์ + backup + นับแถว แล้วหยุดยืนยันก่อน migrate DB dev · restart Docker + GATE 3 ของรอบ 1–2 ยังค้าง
-- วิธีรัน: backend `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build` · frontend `cd frontend && npm run dev` (รันอยู่เบื้องหลังตอนนี้)
+- Git: งานรอบ 1–3 commit บน branch `feat/ai-dlc-build` (รอบ 3 = 3 commit: backend / frontend / docs, 2026-10-03) · ผู้ใช้สั่ง push ขึ้น `main` ของ `github.com/neymo-13/BidFlow` → ต้อง merge งานของทีมบน `origin/main` ก่อน (odometer ราคา + ลบ `backend/Mynote.md`) · ไฟล์ skill ที่ root ไม่ได้ commit
+- R3-B1 ผ่าน (2026-09-29): DB dev migrate เป็น Flyway v2 แล้ว ข้อมูลครบ · backup ก่อน migrate: scratchpad `r3/backup-before-r3.sql`
+- R3-B2 ผ่าน (entity) · R3-B3 ผ่าน (`GET /api/categories`) · R3-B4 ผ่าน (API สร้าง auction ใช้ได้อีกครั้ง — ต้องส่ง `categoryId`) · R3-B5 ผ่าน (`?category=`)
+- ~~frontend: ฟอร์มสร้าง auction ได้ 400 จนจบ R3-F2~~ — แก้แล้วใน R3-F2
+- R3-B6 ผ่าน (role จาก DB, `/api/admin/**` = ADMIN, `role` ใน `/me`)
+- demo: เคยเปิด frontend dev server เบื้องหลังที่ :3000 (D-031) — หยุดไปแล้วตอนสรุปบริบท (log ไม่มี error) · `open-webui` กลับมารันเองหลัง Docker เปิดใหม่
+- R3-B7 ผ่าน (ระงับแล้ว token ใช้ไม่ได้ทันที, login 403 "Account suspended", บัญชีไม่มีรหัสผ่าน login ด้วยรหัสไม่ได้, ตัวจับ `ResponseStatusException`)
+- R3-B8 ผ่าน (admin คนแรกจาก env `ADMIN_*` — ทดสอบด้วย `qa_admin`, รหัสอยู่ใน scratchpad `r3/qa_admin.password.first`) · R3-B9 ผ่าน (`/api/admin/categories` CRUD)
+- ผู้ใช้ทดสอบหน้า admin เองได้เมื่อมีหน้าเว็บ (R3-F4+): สร้าง `.env` ที่ root จาก `.env.example` แล้ว `docker compose ... up -d`
+- R3-B10 ผ่าน (`/api/admin/users` ดู/ค้นหา/ระงับ/ปลดระงับ)
+- R3-B11 ผ่าน (admin ดู auction ทุก status + ยกเลิก + คืนเงิน + แจ้งเตือน; race บิด/ยกเลิกผ่าน) · R3-B12 ผ่าน (`/api/admin/stats`) — backend ฝั่ง admin ครบแล้ว
+- R3-B13 ผ่าน (`GoogleTokenVerifier` + unit test 18/18 ใน container `maven:3.9-eclipse-temurin-21`, volume `bidflow-m2`)
+- R3-B14 ผ่าน (`POST /api/auth/google` — unit test 16/16 + HTTP 19/19 ไม่ตั้งค่า, 10/10 ตั้ง Client ID ทดสอบ · backend กลับมาเป็น "ไม่ตั้ง Client ID" แล้ว) · แก้ของเดิม: body ว่าง / JSON พัง / method ผิด / content type ผิด เคยได้ 500 → 400 / 405 / 415 (D-042)
+- R3-F1 ผ่าน (types + API client — 38/38 เทียบ key กับ type) · R3-F2 ผ่าน (**ฟอร์มสร้าง auction ใช้ได้อีกครั้ง** — ต้องเลือกหมวด) · R3-F3 ผ่าน (หมวดบนการ์ด/detail + ตัวกรอง `/auctions`) · ทดสอบ UI ด้วย headless Chrome ผ่าน CDP (`cdp.cjs`, `test-r3-f23-ui.cjs` ใน scratchpad)
+- R3-F4 ผ่าน (`/admin` + guard + dashboard + เมนู — UI 17/17) · R3-F5 ผ่าน (`/admin/categories` 16/16) · R3-F6 ผ่าน (`/admin/users` 18/18) · R3-F7 ผ่าน (`/admin/auctions` + Dialog ยกเลิก 21/21) — **หน้า admin ใช้งานได้ครบ** (ต้องมี admin จาก `.env` — `qa_admin` ถูกปรับเป็น USER แล้วใน R3-V)
+- R3-F8 ผ่าน (ปุ่ม Google — off 2/2, script จริง 6/6, script จำลอง 12/12 · ต้องตั้ง `NEXT_PUBLIC_GOOGLE_CLIENT_ID` ใน `frontend/.env.local` + `GOOGLE_CLIENT_ID` ใน `.env` ที่ root เป็นค่าเดียวกันถึงจะเห็นปุ่มและใช้ได้)
+- R3-V ผ่าน (build 17 route · eslint ไม่มี error ใหม่ · regression backend 16 สคริปต์ผ่าน · README ×2 + API docs อัปเดต · `qa_admin` → USER) — D-046
+- ขั้นตอนถัดไป: ผู้ใช้ทดสอบ GATE 3 (รอบ 1–3) → แจ้งผล / ปัญหา → แก้ตามผล → commit งานรอบ 3 เมื่อผู้ใช้สั่ง (branch `feat/ai-dlc-build`, ไม่ push)
+- Backlog ใหม่: `wallet_balance` ไม่ล็อกแถวผู้ใช้ (D-038) · login เดา username จากเวลา (D-034) · test ชุดเดิมต้องใส่ category ก่อนรัน (D-040) · 403 ไม่มี body → ข้อความ "Request failed with status code 403" (D-044)
+- วิธีรัน: backend `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build` · frontend `cd frontend && npm run dev` (รันอยู่เบื้องหลังที่ :3000 · `open-webui` ถูกหยุดอีกครั้ง)
 - สภาพแวดล้อม local: backend 8081, Postgres 5433, Redis 6379, s3mock 9090, frontend 3000 · เครื่องมี Jenkins (8080), PostgreSQL service (5432), Java 17 ใน PATH · container `open-webui` ถูกหยุดเพื่อใช้พอร์ต 3000
-- ข้อมูลทดสอบใน DB dev: user `qa_bot`, `qa_bidder_a`, `qa_bidder_b` (รหัส password123) · auction `[TEST]` id 6, 9–26 เป็น CANCELLED ทั้งหมด · รูปทดสอบใน bucket ใต้ `auctions/17..26/` (D-014–D-022)
+- ข้อมูลทดสอบใน DB dev: user `qa_bot`, `qa_bidder_a`, `qa_bidder_b` (รหัส password123) + `qa_admin` (USER แล้ว) · auction `[TEST]` ทั้งหมดเป็น CANCELLED (ไม่มีที่มองเห็นได้) · รูปทดสอบใน bucket ใต้ `auctions/…` (D-014–D-022) · ยอด wallet รวม 298,001 (+20,000 = เงินฝากตั้งต้นของสคริปต์ R2-B4 ที่รันซ้ำตอน R3-V)
 - ยังไม่ commit — รอผู้ใช้สั่ง
 - Backlog (นอกขอบเขต ยังไม่แก้): eslint error เดิม 4 จุด (`app/page.tsx`, `lib/hooks/use-auction-websocket.ts`, `lib/store/auth-store.ts` ×2) · ข้อความ error เรื่องเงินไม่พอมี user id ภายใน · backend ไม่จำกัดยอดฝากสูงสุด · endpoint บิดตอบต่างกันระหว่าง "ไม่มีจริง" กับ DRAFT (เดาได้ว่ามี id อยู่ ความเสี่ยงต่ำ) · HEALTHCHECK ของ `backend/Dockerfile` ยิง `/actuator/health` ที่ไม่มี → unhealthy · ข้อความเวลานับถอยหลังไม่อัปเดตเอง · seller โหลดแบบ lazy (1 query ต่อผู้ขาย) ในหน้า list
