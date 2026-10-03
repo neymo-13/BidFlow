@@ -29,6 +29,10 @@ export function AuctionCard({ auction }: { auction: AuctionSummary }) {
 				</div>
 
 				<CardHeader className="pb-3">
+					{/* Plain text — the whole card is already a link */}
+					<p className="truncate text-xs font-medium uppercase tracking-wide text-blue-600">
+						{auction.category.name}
+					</p>
 					<CardTitle className="text-lg line-clamp-2 min-h-[3.5rem]">
 						{auction.title}
 					</CardTitle>

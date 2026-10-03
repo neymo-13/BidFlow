@@ -21,6 +21,7 @@ export const auctionApi = {
     if (status) params.append("status", status);
     if (filters.q) params.append("q", filters.q);
     if (filters.sort) params.append("sort", filters.sort);
+    if (filters.category) params.append("category", filters.category);
     params.append("page", String(page));
     params.append("size", String(size));
 

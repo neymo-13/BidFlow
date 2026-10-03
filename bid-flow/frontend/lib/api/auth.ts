@@ -1,5 +1,5 @@
 import { api } from "../http";
-import { AuthResponse, LoginRequest, RegisterRequest, User } from "../types";
+import { AuthResponse, GoogleLoginRequest, LoginRequest, RegisterRequest, User } from "../types";
 
 export const authApi = {
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
@@ -9,6 +9,12 @@ export const authApi = {
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
     const res = await api.post<AuthResponse>("/api/auth/login", data);
+    return res.data;
+  },
+
+  // Existing account (same Google account or same email) or a new one · suspended → 403 · not configured → 503
+  google: async (data: GoogleLoginRequest): Promise<AuthResponse> => {
+    const res = await api.post<AuthResponse>("/api/auth/google", data);
     return res.data;
   },
 

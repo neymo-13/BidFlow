@@ -4,6 +4,7 @@ import { localInputToIso } from "@/lib/format";
 // (times are <input type="datetime-local"> values in local time)
 export interface AuctionFormValues {
   title: string;
+  categoryId: string; // <select> value — "" until a category is chosen
   description: string;
   startPrice: string;
   minIncrement: string;
@@ -17,6 +18,7 @@ export type AuctionFieldErrors = Partial<Record<AuctionFieldName, string>>;
 // Only fields that changed in edit mode; everything in create mode
 export interface AuctionFormPayload {
   title?: string;
+  categoryId?: number;
   description?: string;
   startPrice?: number;
   minIncrement?: number;
@@ -44,6 +46,9 @@ export function validateAuctionForm(
   const title = values.title.trim();
   if (!title) errors.title = "Title is required";
   else if (title.length > TITLE_MAX) errors.title = `Title must be at most ${TITLE_MAX} characters`;
+
+  // Same message as the API. Whether the category is still visible is checked by the API.
+  if (!values.categoryId) errors.categoryId = "Category is required";
 
   if (values.description.length > DESCRIPTION_MAX) {
     errors.description = `Description must be at most ${DESCRIPTION_MAX} characters`;
@@ -84,6 +89,7 @@ export function buildAuctionPayload(
 ): AuctionFormPayload {
   const payload: AuctionFormPayload = {};
   if (isChanged("title")) payload.title = values.title.trim();
+  if (isChanged("categoryId")) payload.categoryId = Number(values.categoryId);
   if (isChanged("description")) payload.description = values.description.trim();
   if (isChanged("startPrice")) payload.startPrice = Number(values.startPrice.trim());
   if (isChanged("minIncrement")) payload.minIncrement = Number(values.minIncrement.trim());

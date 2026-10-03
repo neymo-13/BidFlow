@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { authApi } from "@/lib/api";
+import { getErrorMessage } from "@/lib/http";
 import { AuthResponse, LoginRequest, RegisterRequest, User } from "@/lib/types";
 
 interface AuthState {
@@ -11,6 +12,7 @@ interface AuthState {
 
   // Actions
   login: (data: LoginRequest) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
   loadUser: () => Promise<void>;
@@ -38,6 +40,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err: any) {
       const message = err?.response?.data?.message || "Login failed";
       set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  // =====================================================
+  // Google sign-in — credential = ID token from the Google button.
+  // The backend verifies it and returns our own JWT (existing or new account).
+  // =====================================================
+  loginWithGoogle: async (credential) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res: AuthResponse = await authApi.google({ credential });
+      saveAuth(res);
+      const user = await authApi.getMe();
+      set({ user, token: res.token, isLoading: false });
+    } catch (err) {
+      set({ error: getErrorMessage(err), isLoading: false });
       throw err;
     }
   },

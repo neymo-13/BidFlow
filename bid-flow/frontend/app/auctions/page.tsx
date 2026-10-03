@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { auctionApi } from "@/lib/api";
+import { useCategories } from "@/lib/hooks/use-categories";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import type { AuctionSort } from "@/lib/types";
 
@@ -33,8 +34,10 @@ const DEFAULT_SORT: AuctionSort = "newest";
 const PAGE_SIZE = 12;
 const QUERY_MAX = 100; // same limit as the API
 const SEARCH_DEBOUNCE_MS = 400;
+const SELECT_CLASS =
+	"h-9 rounded-lg border border-input bg-white px-2.5 text-sm text-slate-900 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-type QueryUpdate = { status?: ListStatus; page?: number; q?: string; sort?: AuctionSort };
+type QueryUpdate = { status?: ListStatus; page?: number; q?: string; sort?: AuctionSort; category?: string };
 
 export default function AuctionsPage() {
 	// useSearchParams needs a Suspense boundary for production builds
@@ -62,9 +65,18 @@ function AuctionsContent() {
 	const sort = parseSort(searchParams.get("sort"));
 	const statusOption = STATUS_OPTIONS.find((o) => o.value === status) ?? STATUS_OPTIONS[0];
 
+	// Only slugs of visible categories are sent — anything else in the URL is ignored instead of
+	// getting a 400. If the list can't load, the slug is passed through and the API decides.
+	const { categories, isLoading: categoriesLoading, error: categoriesError } = useCategories();
+	const requestedCategory = parseCategory(searchParams.get("category"));
+	const categoryOption = categories.find((c) => c.slug === requestedCategory);
+	const category = categoriesError ? requestedCategory : (categoryOption?.slug ?? "");
+	const waitingForCategories = requestedCategory !== "" && categoriesLoading;
+
 	const { data, error, isLoading, reload } = useFetch(
-		() => auctionApi.list(status, page, PAGE_SIZE, { q: q || undefined, sort }),
-		[status, page, q, sort]
+		() => auctionApi.list(status, page, PAGE_SIZE, { q: q || undefined, sort, category: category || undefined }),
+		[status, page, q, sort, category],
+		{ enabled: !waitingForCategories }
 	);
 
 	// Keep filters in the URL so refresh / shared links keep the same view.
@@ -72,8 +84,13 @@ function AuctionsContent() {
 	// search can fire after another filter has already changed.
 	const updateQuery = (next: QueryUpdate, mode: "push" | "replace" = "push") => {
 		const params = new URLSearchParams(window.location.search);
-		const filterChanged = next.status !== undefined || next.q !== undefined || next.sort !== undefined;
+		const filterChanged =
+			next.status !== undefined || next.q !== undefined || next.sort !== undefined || next.category !== undefined;
 		if (next.status) params.set("status", next.status);
+		if (next.category !== undefined) {
+			if (next.category) params.set("category", next.category);
+			else params.delete("category");
+		}
 		if (next.q !== undefined) {
 			if (next.q) params.set("q", next.q);
 			else params.delete("q");
@@ -126,22 +143,39 @@ function AuctionsContent() {
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
 				{/* Typing updates the URL with replace so each keystroke doesn't add a history entry */}
 				<SearchBox value={q} onSearch={(next) => updateQuery({ q: next }, "replace")} />
-				<div className="flex items-center gap-2">
-					<label htmlFor="auction-sort" className="shrink-0 text-sm text-slate-500">
-						Sort by
-					</label>
+				<div className="flex flex-wrap items-center gap-3">
 					<select
-						id="auction-sort"
-						value={sort}
-						onChange={(e) => updateQuery({ sort: parseSort(e.target.value) })}
-						className="h-9 rounded-lg border border-input bg-white px-2.5 text-sm text-slate-900 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+						aria-label="Category"
+						value={category}
+						onChange={(e) => updateQuery({ category: e.target.value })}
+						className={SELECT_CLASS}
 					>
-						{SORT_OPTIONS.map((option) => (
-							<option key={option.value} value={option.value}>
-								{option.label}
+						<option value="">All categories</option>
+						{/* Only reachable when the list failed to load: keep the slug from the URL selectable */}
+						{category && !categoryOption && <option value={category}>{category}</option>}
+						{categories.map((option) => (
+							<option key={option.id} value={option.slug}>
+								{option.name}
 							</option>
 						))}
 					</select>
+					<div className="flex items-center gap-2">
+						<label htmlFor="auction-sort" className="shrink-0 text-sm text-slate-500">
+							Sort by
+						</label>
+						<select
+							id="auction-sort"
+							value={sort}
+							onChange={(e) => updateQuery({ sort: parseSort(e.target.value) })}
+							className={SELECT_CLASS}
+						>
+							{SORT_OPTIONS.map((option) => (
+								<option key={option.value} value={option.value}>
+									{option.label}
+								</option>
+							))}
+						</select>
+					</div>
 				</div>
 			</div>
 
@@ -161,11 +195,19 @@ function AuctionsContent() {
 						<Gavel className="h-7 w-7 text-slate-400" />
 					</div>
 					<h2 className="font-semibold text-slate-900">
-						{q ? `No auctions match "${q}"` : statusOption.empty}
+						{q
+							? `No auctions match "${q}"`
+							: categoryOption
+								? `No ${statusOption.label.toLowerCase()} auctions in ${categoryOption.name}`
+								: statusOption.empty}
 					</h2>
 					{q ? (
 						<Button variant="outline" size="sm" className="mt-4" onClick={() => updateQuery({ q: "" })}>
 							Clear search
+						</Button>
+					) : category ? (
+						<Button variant="outline" size="sm" className="mt-4" onClick={() => updateQuery({ category: "" })}>
+							Show all categories
 						</Button>
 					) : page > 0 ? (
 						<Button variant="outline" size="sm" className="mt-4" onClick={() => updateQuery({ page: 0 })}>
@@ -295,4 +337,9 @@ function parseQuery(value: string | null): string {
 
 function parseSort(value: string | null): AuctionSort {
 	return SORT_OPTIONS.find((o) => o.value === value)?.value ?? DEFAULT_SORT;
+}
+
+// Slugs are lowercase; whether it exists is checked against the category list
+function parseCategory(value: string | null): string {
+	return (value ?? "").trim().toLowerCase();
 }

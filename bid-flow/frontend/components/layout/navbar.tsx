@@ -25,6 +25,7 @@ import {
 	User as UserIcon,
 	PlusCircle,
 	ChevronDown,
+	ShieldCheck,
 } from "lucide-react";
 
 export function Navbar() {
@@ -132,6 +133,17 @@ export function Navbar() {
 											<Bell className="mr-2 h-4 w-4" />
 											Notifications
 										</DropdownMenuItem>
+
+										{/* UX only — admin pages and API check the role again */}
+										{user.role === "ADMIN" && (
+											<>
+												<DropdownMenuSeparator />
+												<DropdownMenuItem onClick={() => router.push('/admin')} className="rounded-md text-violet-700 hover:bg-violet-50 transition-colors">
+													<ShieldCheck className="mr-2 h-4 w-4" />
+													Admin
+												</DropdownMenuItem>
+											</>
+										)}
 
 										<DropdownMenuSeparator />
 

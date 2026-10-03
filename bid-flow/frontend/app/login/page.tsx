@@ -17,6 +17,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useRedirectIfAuth } from "@/lib/hooks/use-auth";
 import { getErrorMessage } from "@/lib/http";
@@ -28,7 +29,7 @@ function LoginForm() {
 
 	const redirect = safeRedirect(searchParams.get("redirect"));
 
-	const { login, isLoading, error, clearError } = useAuthStore();
+	const { login, loginWithGoogle, isLoading, error, clearError } = useAuthStore();
 
 	useRedirectIfAuth(redirect);
 
@@ -44,6 +45,19 @@ function LoginForm() {
 
 		try {
 			await login({ username, password });
+			router.push(redirect);
+		} catch (err) {
+			setLocalError(getErrorMessage(err));
+		}
+	};
+
+	// Existing account (same Google account or same email) or a new one — errors show like a normal login
+	const handleGoogle = async (credential: string) => {
+		setLocalError(null);
+		clearError();
+
+		try {
+			await loginWithGoogle(credential);
 			router.push(redirect);
 		} catch (err) {
 			setLocalError(getErrorMessage(err));
@@ -176,6 +190,9 @@ function LoginForm() {
 								>
 									{isLoading ? "Signing in..." : "Sign in"}
 								</Button>
+
+								{/* Renders nothing unless NEXT_PUBLIC_GOOGLE_CLIENT_ID is set */}
+								<GoogleSignInButton onCredential={handleGoogle} />
 
 								<p className="text-sm text-slate-500">
 									Don&apos;t have an account?{" "}

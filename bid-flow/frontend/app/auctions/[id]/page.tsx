@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useAuctionWebSocket } from "@/lib/hooks/use-auction-websocket";
@@ -318,6 +318,12 @@ export default function AuctionDetailPage({
 				<div className="lg:col-span-2 space-y-4">
 					{/* Title + Status */}
 					<div>
+						<Link
+							href={`/auctions?category=${encodeURIComponent(auction.category.slug)}`}
+							className={cn(badgeVariants({ variant: "outline" }), "mb-2")}
+						>
+							{auction.category.name}
+						</Link>
 						<div className="flex items-start justify-between gap-2 mb-2">
 							<h1 className="text-2xl font-bold">{auction.title}</h1>
 							{isActive && (

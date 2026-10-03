@@ -98,6 +98,7 @@ function defaultValues(): AuctionFormValues {
 
 	return {
 		title: "",
+		categoryId: "",
 		description: "",
 		startPrice: "",
 		minIncrement: "",

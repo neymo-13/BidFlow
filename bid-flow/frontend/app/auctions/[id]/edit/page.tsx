@@ -87,6 +87,7 @@ function EditAuctionContent({ auctionId }: { auctionId: number }) {
 						key={auction.id}
 						mode="edit"
 						initialValues={toFormValues(auction)}
+						currentCategory={auction.category}
 						submitLabel="Save changes"
 						onSubmit={handleSubmit}
 						onCancel={() => router.push("/auctions/my")}
@@ -152,6 +153,7 @@ function Notice({ title, description, onRetry }: { title: string; description?: 
 function toFormValues(auction: Auction): AuctionFormValues {
 	return {
 		title: auction.title,
+		categoryId: String(auction.category.id),
 		description: auction.description ?? "",
 		startPrice: String(auction.startPrice),
 		minIncrement: String(auction.minIncrement),

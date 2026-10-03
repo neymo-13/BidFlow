@@ -16,8 +16,13 @@ interface FetchResult<T> {
 // - state is only set after the request settles, so it is safe to use
 //   with the react-hooks/set-state-in-effect rule
 // `deps` must be primitives (page number, id, status...)
+// `enabled: false` holds the request (isLoading stays true) until something it needs is ready
 // =====================================================
-export function useFetch<T>(fetcher: () => Promise<T>, deps: ReadonlyArray<string | number | boolean | null | undefined>) {
+export function useFetch<T>(
+  fetcher: () => Promise<T>,
+  deps: ReadonlyArray<string | number | boolean | null | undefined>,
+  { enabled = true }: { enabled?: boolean } = {}
+) {
   const [reloadCount, setReloadCount] = useState(0);
   const [result, setResult] = useState<FetchResult<T> | null>(null);
 
@@ -30,6 +35,7 @@ export function useFetch<T>(fetcher: () => Promise<T>, deps: ReadonlyArray<strin
   const key = JSON.stringify([...deps, reloadCount]);
 
   useEffect(() => {
+    if (!enabled) return;
     let ignore = false;
 
     fetcherRef.current().then(
@@ -46,7 +52,7 @@ export function useFetch<T>(fetcher: () => Promise<T>, deps: ReadonlyArray<strin
     return () => {
       ignore = true;
     };
-  }, [key]);
+  }, [key, enabled]);
 
   const reload = useCallback(() => setReloadCount((n) => n + 1), []);
 

@@ -18,11 +18,14 @@ import {
 	TITLE_MAX,
 	validateAuctionForm,
 } from "@/lib/auction-form";
+import { useCategories } from "@/lib/hooks/use-categories";
 import { ApiError, getErrorMessage } from "@/lib/http";
+import type { Category } from "@/lib/types";
 
 interface AuctionFormProps {
 	mode: "create" | "edit";
 	initialValues: AuctionFormValues;
+	currentCategory?: Category; // edit mode — may have been hidden by an admin since
 	submitLabel: string;
 	onSubmit: (payload: AuctionFormPayload) => Promise<void>;
 	onCancel?: () => void;
@@ -30,11 +33,30 @@ interface AuctionFormProps {
 }
 
 // Shared by the create and edit pages
-export function AuctionForm({ mode, initialValues, submitLabel, onSubmit, onCancel, footerNote }: AuctionFormProps) {
+export function AuctionForm({
+	mode,
+	initialValues,
+	currentCategory,
+	submitLabel,
+	onSubmit,
+	onCancel,
+	footerNote,
+}: AuctionFormProps) {
 	const [values, setValues] = useState<AuctionFormValues>(initialValues);
 	const [fieldErrors, setFieldErrors] = useState<AuctionFieldErrors>({});
 	const [formError, setFormError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const {
+		categories,
+		error: categoriesError,
+		isLoading: categoriesLoading,
+		reload: reloadCategories,
+	} = useCategories();
+
+	// A hidden category isn't in the public list — keep it as an option so the draft still shows it
+	const missingCurrent =
+		currentCategory && !categories.some((c) => c.id === currentCategory.id) ? currentCategory : null;
+	const categoriesLoaded = !categoriesLoading && !categoriesError;
 
 	const setField = (field: AuctionFieldName, value: string) => {
 		setValues((prev) => ({ ...prev, [field]: value }));
@@ -96,6 +118,41 @@ export function AuctionForm({ mode, initialValues, submitLabel, onSubmit, onCanc
 					aria-invalid={fieldErrors.title ? true : undefined}
 					className="h-10"
 				/>
+			</Field>
+
+			<Field id="categoryId" label="Category" error={fieldErrors.categoryId}>
+				<select
+					id="categoryId"
+					value={values.categoryId}
+					onChange={(e) => setField("categoryId", e.target.value)}
+					aria-invalid={fieldErrors.categoryId ? true : undefined}
+					className="h-10 w-full rounded-lg border border-input bg-white px-2.5 text-sm text-slate-900 outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+				>
+					{values.categoryId === "" && (
+						<option value="" disabled>
+							{categoriesLoading ? "Loading categories..." : "Select a category"}
+						</option>
+					)}
+					{missingCurrent && (
+						<option value={String(missingCurrent.id)}>
+							{missingCurrent.name}
+							{categoriesLoaded ? " (hidden)" : ""}
+						</option>
+					)}
+					{categories.map((category) => (
+						<option key={category.id} value={String(category.id)}>
+							{category.name}
+						</option>
+					))}
+				</select>
+				{categoriesError && (
+					<p className="flex flex-wrap items-center gap-x-2 text-sm text-red-600">
+						Couldn&apos;t load categories: {categoriesError}
+						<button type="button" onClick={reloadCategories} className="font-medium underline">
+							Retry
+						</button>
+					</p>
+				)}
 			</Field>
 
 			<Field

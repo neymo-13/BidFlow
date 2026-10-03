@@ -17,13 +17,14 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useRedirectIfAuth } from "@/lib/hooks/use-auth";
 import { getErrorMessage } from "@/lib/http";
 
 export default function RegisterPage() {
 	const router = useRouter();
-	const { register, isLoading, error, clearError } = useAuthStore();
+	const { register, loginWithGoogle, isLoading, error, clearError } = useAuthStore();
 
 	useRedirectIfAuth();
 
@@ -48,6 +49,19 @@ export default function RegisterPage() {
 
 		try {
 			await register(form);
+			router.push("/");
+		} catch (err) {
+			setLocalError(getErrorMessage(err));
+		}
+	};
+
+	// A new Google account gets a new BidFlow account; an email that already exists signs into that account
+	const handleGoogle = async (credential: string) => {
+		setLocalError(null);
+		clearError();
+
+		try {
+			await loginWithGoogle(credential);
 			router.push("/");
 		} catch (err) {
 			setLocalError(getErrorMessage(err));
@@ -220,6 +234,9 @@ export default function RegisterPage() {
 								>
 									{isLoading ? "Creating account..." : "Create account"}
 								</Button>
+
+								{/* Renders nothing unless NEXT_PUBLIC_GOOGLE_CLIENT_ID is set */}
+								<GoogleSignInButton onCredential={handleGoogle} />
 
 								<p className="text-sm text-slate-500">
 									Already have an account?{" "}

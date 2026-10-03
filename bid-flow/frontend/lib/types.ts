@@ -1,6 +1,9 @@
 // =====================================================
 // Auth
 // =====================================================
+// UI only (e.g. showing the Admin menu) — the backend checks the role on every request
+export type Role = "USER" | "ADMIN";
+
 export interface User {
   id: number;
   username: string;
@@ -8,6 +11,7 @@ export interface User {
   fullName: string;
   walletBalance: number;
   createdAt: string;
+  role: Role;
 }
 
 export interface AuthResponse {
@@ -31,6 +35,11 @@ export interface LoginRequest {
   password: string;
 }
 
+// credential = the ID token from the Google Identity Services button
+export interface GoogleLoginRequest {
+  credential: string;
+}
+
 // =====================================================
 // Wallet
 // =====================================================
@@ -49,6 +58,16 @@ export interface WalletTransaction {
   referenceId: number | null;
   description: string;
   createdAt: string;
+}
+
+// =====================================================
+// Category
+// =====================================================
+// slug is the value used in URLs (?category=cameras)
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
 }
 
 // =====================================================
@@ -85,6 +104,7 @@ export interface Auction {
   createdAt: string;
   updatedAt: string;
   images: AuctionImage[]; // ordered by displayOrder, primary first
+  category: Category; // may be a hidden category (still shown on existing auctions)
 }
 
 export interface AuctionSummary {
@@ -97,11 +117,13 @@ export interface AuctionSummary {
   totalBids: number;
   sellerUsername: string;
   primaryImageUrl: string | null;
+  category: Category;
 }
 
 export interface AuctionListFilters {
   q?: string;
   sort?: AuctionSort;
+  category?: string; // slug of a visible category — unknown / hidden → 400
 }
 
 export interface CreateAuctionRequest {
@@ -111,6 +133,7 @@ export interface CreateAuctionRequest {
   minIncrement: number;
   startTime: string;
   endTime: string;
+  categoryId: number;
 }
 
 export interface UpdateAuctionRequest {
@@ -120,6 +143,7 @@ export interface UpdateAuctionRequest {
   minIncrement?: number;
   startTime?: string;
   endTime?: string;
+  categoryId?: number; // omit (or send the current id) to keep the category
 }
 
 // =====================================================
@@ -174,6 +198,54 @@ export interface Notification {
   isRead: boolean;
   auctionItemId: number | null;
   createdAt: string;
+}
+
+// =====================================================
+// Admin (every /api/admin/** call needs role ADMIN)
+// =====================================================
+export interface AdminCategory extends Category {
+  active: boolean; // false = hidden from the public list, filter and forms
+  auctionCount: number; // auctions of any status using this category
+}
+
+export interface CreateCategoryRequest {
+  name: string;
+}
+
+// Send only what changes — the slug never changes
+export interface UpdateCategoryRequest {
+  name?: string;
+  active?: boolean;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  suspended: boolean;
+  googleLinked: boolean;
+  walletBalance: number;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  suspendedUsers: number;
+  adminUsers: number;
+  auctionsByStatus: Record<AuctionStatus, number>; // every status present, 0 when none
+  totalBids: number;
+  totalSales: number; // sum of final prices of auctions that ended with a winner
+}
+
+export interface AdminAuctionFilters {
+  status?: AuctionStatus; // all statuses (incl. DRAFT / CANCELLED) when omitted
+  q?: string;
+}
+
+export interface CancelAuctionRequest {
+  reason: string; // 1–500 characters, shown to the seller and bidders
 }
 
 // =====================================================
