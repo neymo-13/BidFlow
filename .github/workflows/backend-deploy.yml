@@ -26,6 +26,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Debug OIDC claims
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString()
+            );
+            console.log(JSON.stringify({
+              iss: payload.iss,
+              aud: payload.aud,
+              sub: payload.sub
+            }, null, 2));
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
