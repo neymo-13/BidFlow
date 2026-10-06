@@ -90,7 +90,8 @@ public class SecurityConfig {
 
 		config.setAllowedOrigins(List.of(
 				"http://localhost:3000",
-				"http://127.0.0.1:3000"));
+				"http://127.0.0.1:3000",
+				"https://main.d21g5ggxfktfn1.amplifyapp.com"));
 
 		config.setAllowedMethods(List.of(
 				"GET",
