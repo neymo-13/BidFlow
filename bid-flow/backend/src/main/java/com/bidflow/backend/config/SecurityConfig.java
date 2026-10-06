@@ -27,60 +27,62 @@ public class SecurityConfig {
 
 	private final JwtAuthFilter jwtAuthFilter;
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+	@Bean
+	public PasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder();
+	}
 
 	@Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
+	public AuthenticationManager authenticationManager(
+			AuthenticationConfiguration config) throws Exception {
+		return config.getAuthenticationManager();
+	}
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
+	@Bean
+	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+		http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+				.csrf(AbstractHttpConfigurer::disable)
+				.sessionManagement(session -> session
+						.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				// เพิ่ม JwtAuthFilter ก่อน UsernamePasswordAuthenticationFilte
 				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-				// ไม่มี auth ให้คืน 401 · login แล้วแต่ไม่มีสิทธิ์ (เช่น USER เรียก /api/admin/**) ให้คืน 403
-				// ตั้ง status ตรงๆ ทั้งคู่ (ค่าเริ่มต้นของ 403 ใช้ sendError ซึ่งส่งต่อไป /error อีกรอบ)
+				// ไม่มี auth ให้คืน 401 · login แล้วแต่ไม่มีสิทธิ์ (เช่น USER เรียก
+				// /api/admin/**) ให้คืน 403
+				// ตั้ง status ตรงๆ ทั้งคู่ (ค่าเริ่มต้นของ 403 ใช้ sendError ซึ่งส่งต่อไป
+				// /error อีกรอบ)
 				.exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
-                        .accessDeniedHandler((request, response, denied) ->
-                                response.setStatus(HttpStatus.FORBIDDEN.value()))
-                )
-                .authorizeHttpRequests(auth -> auth
+						.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+						.accessDeniedHandler(
+								(request, response, denied) -> response.setStatus(HttpStatus.FORBIDDEN.value())))
+				.authorizeHttpRequests(auth -> auth
 						// Public: register/login
 						.requestMatchers("/api/auth/**").permitAll()
+
+						// Health check สำหรับ ALB
+						.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+
 						// WebSocket handshake
 						.requestMatchers("/ws/**").permitAll()
 
-                        // /my ต้อง login (ต้องอยู่ก่อน!)
-                        .requestMatchers(HttpMethod.GET, "/api/auctions/my").authenticated()
+						// /my ต้อง login
+						.requestMatchers(HttpMethod.GET, "/api/auctions/my").authenticated()
 
-                        // Auction list + detail = public
-                        .requestMatchers(HttpMethod.GET, "/api/auctions").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/auctions/*").permitAll()
+						// Auction list + detail = public
+						.requestMatchers(HttpMethod.GET, "/api/auctions").permitAll()
+						.requestMatchers(HttpMethod.GET, "/api/auctions/*").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/auctions/*/bids").permitAll()
 
 						// หมวดหมู่ = public
 						.requestMatchers(HttpMethod.GET, "/api/categories").permitAll()
 
-						// หน้าที่ของ admin ทั้งหมด (role อ่านจาก DB ใน JwtAuthFilter)
+						// Admin
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // ที่เหลือต้อง login
-                        // .anyRequest().permitAll()      // ชั่วคราว
-                        .anyRequest().authenticated()     // ชั่วคราว
-                );
-        return http.build();
-    }
+						// ที่เหลือต้อง login
+						.anyRequest().authenticated());
+		return http.build();
+	}
 
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
@@ -88,8 +90,7 @@ public class SecurityConfig {
 
 		config.setAllowedOrigins(List.of(
 				"http://localhost:3000",
-				"http://127.0.0.1:3000"
-		));
+				"http://127.0.0.1:3000"));
 
 		config.setAllowedMethods(List.of(
 				"GET",
@@ -97,14 +98,12 @@ public class SecurityConfig {
 				"PUT",
 				"PATCH",
 				"DELETE",
-				"OPTIONS"
-		));
+				"OPTIONS"));
 
 		config.setAllowedHeaders(List.of("*"));
 		config.setAllowCredentials(true);
 
-		UrlBasedCorsConfigurationSource source =
-				new UrlBasedCorsConfigurationSource();
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
 		source.registerCorsConfiguration("/**", config);
 

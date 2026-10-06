@@ -11,7 +11,6 @@ services:
       POSTGRES_DB: auction_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d auction_db"]
       interval: 5s
@@ -63,6 +62,17 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+
+      DATABASE_URL: jdbc:postgresql://postgres-db:5432/auction_db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_SSL: "false"
+
+      JWT_SECRET: ZGV2LW9ubHktc2VjcmV0LWtleS1mb3ItYmlkZmxvdy1hdWN0aW9uLXByb2plY3Q=
+
       STORAGE_BUCKET: bidflow-images
       STORAGE_REGION: us-east-1
       STORAGE_ENDPOINT: http://object-storage:9090      # address inside the Docker network
