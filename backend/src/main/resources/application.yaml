@@ -52,6 +52,9 @@ app:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
+  cors:
+      allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+
   # admin คนแรก (AdminBootstrap) — ตั้งผ่าน env เท่านั้น ห้ามใส่ค่าจริงในไฟล์นี้ · username ว่าง = ข้าม
   admin:
     username: ${ADMIN_USERNAME:}
