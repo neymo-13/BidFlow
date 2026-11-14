@@ -27,6 +27,7 @@ import {
 	ChevronDown,
 	ShieldCheck,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Navbar() {
 	const router = useRouter();
@@ -38,7 +39,7 @@ export function Navbar() {
 	};
 
 	return (
-		<nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm">
+		<nav className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-slate-950/80">
 			<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 				<div className="flex items-center justify-between gap-4 py-3">
 					{/* Left: Logo + Nav */}
@@ -48,7 +49,7 @@ export function Navbar() {
 								<Gavel className="h-4 w-4" />
 							</div>
 
-							<span className="text-lg font-semibold tracking-tight text-slate-900">BidFlow</span>
+							<span className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">BidFlow</span>
 						</Link>
 
 						<div className="hidden md:flex items-center gap-2">
@@ -66,6 +67,7 @@ export function Navbar() {
 
 					{/* Right: Wallet, Actions, User */}
 					<div className="flex items-center gap-3">
+						<ThemeToggle />
 						{/* Always mounted so it can reset its polling state on logout */}
 						<NotificationBell />
 

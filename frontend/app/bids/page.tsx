@@ -153,7 +153,7 @@ function MyBidRow({ bid }: { bid: MyBid }) {
 					) : (
 						<Link
 							href={`/auctions/${bid.auctionId}`}
-							className={buttonVariants({ variant: "outline", size: "sm" })}
+							className={cn(buttonVariants({ variant: "outline", size: "sm" }), "dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10")}
 						>
 							<Eye />
 							View

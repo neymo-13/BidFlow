@@ -12,6 +12,7 @@ export default function HomePage() {
 	const [auctions, setAuctions] = useState<AuctionSummary[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [pointer, setPointer] = useState({ x: 50, y: 20 });
 
 	useEffect(() => {
 		loadAuctions();
@@ -32,26 +33,33 @@ export default function HomePage() {
 	};
 
 	return (
-		<main className="min-h-screen bg-gradient-to-b from-blue-50/40 via-slate-50/30 to-white">
+		<main
+			className="min-h-screen bg-gradient-to-b from-blue-50/50 via-slate-50/30 to-white dark:from-slate-950 dark:via-slate-950 dark:to-slate-900"
+			onMouseMove={(event) => {
+				const rect = event.currentTarget.getBoundingClientRect();
+				setPointer({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 });
+			}}
+		>
 			{/* Hero */}
-			<section className="relative overflow-hidden border-b">
-				<div className="absolute inset-0 opacity-60 bg-gradient-to-br from-blue-50/50 via-white to-transparent" />
+			<section className="relative overflow-hidden border-b border-slate-200/80 dark:border-white/10">
+				<div className="pointer-events-none absolute inset-0 transition-[background] duration-300" style={{ background: `radial-gradient(circle at ${pointer.x}% ${pointer.y}%, rgba(59,130,246,.2), transparent 28%), radial-gradient(circle at 85% 30%, rgba(124,58,237,.12), transparent 30%)` }} />
+				<div className="pointer-events-none absolute inset-0 animate-gradient-drift bg-[radial-gradient(circle_at_70%_20%,rgba(99,102,241,.12),transparent_25%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,.1),transparent_28%)]" />
 
 				<div className="relative mx-auto max-w-7xl px-6 py-16 md:px-8 md:py-24">
 					<div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
 						<div className="max-w-2xl">
-							<div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
+							<div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-300">
 								<Gavel className="h-4 w-4" />
 								Live Auction Platform
 							</div>
 
-							<h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-6xl">
+							<h1 className="text-4xl font-semibold tracking-tight text-slate-950 dark:text-white md:text-6xl">
 								Bid in real time.
 								<br />
-								<span className="text-blue-600">Win with confidence.</span>
+								<span className="bg-gradient-to-r from-blue-600 to-violet-500 bg-clip-text text-transparent">Win with confidence.</span>
 							</h1>
 
-							<p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
+							<p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300 md:text-lg">
 								Discover live auctions, place competitive bids, and follow every
 								auction in real time with a fast and transparent bidding
 								experience.
@@ -125,7 +133,7 @@ export default function HomePage() {
 
 					<Button
 						variant="outline"
-						className="h-10 rounded-xl border-slate-200 bg-white"
+						className="h-10 rounded-xl border-slate-200 bg-white text-slate-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
 						onClick={loadAuctions}
 						disabled={loading}
 					>

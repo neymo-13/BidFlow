@@ -114,7 +114,7 @@ function NotificationsContent() {
 											<Link
 												href={`/auctions/${n.auctionItemId}`}
 												onClick={() => !n.isRead && markRead(n.id).catch(() => undefined)}
-												className={buttonVariants({ variant: "outline", size: "sm" })}
+														className={`${buttonVariants({ variant: "outline", size: "sm" })} dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10`}
 											>
 												<ExternalLink />
 												View auction

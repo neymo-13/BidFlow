@@ -18,8 +18,14 @@ public interface AuctionItemRepository extends JpaRepository<AuctionItem, Long>,
 
     Page<AuctionItem> findByStatus(AuctionStatus status, Pageable pageable);
 
+    long countByStatus(AuctionStatus status);
+
     Page<AuctionItem> findBySellerId(Long sellerId, Pageable pageable);
 
 	List<AuctionItem> findByStatusAndEndTimeBefore(AuctionStatus status, OffsetDateTime time);
+
+    java.util.Optional<AuctionItem> findByTitle(String title);
+
+    List<AuctionItem> findByTitleStartingWith(String titlePrefix);
 
 }

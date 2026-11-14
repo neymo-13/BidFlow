@@ -30,6 +30,8 @@ import {
 	Rocket,
 	Wifi,
 	WifiOff,
+	ChevronLeft,
+	ChevronRight,
 } from "lucide-react";
 
 export default function AuctionDetailPage({
@@ -171,10 +173,9 @@ export default function AuctionDetailPage({
 			await bidApi.placeBid(auctionId, amount);
 
 			// WebSocket จะอัปเดต UI — แค่ refresh balance
-			setBidSuccess(true);
 			setBidAmount("");
+			setBidSuccess(true);
 			await refreshUser();
-
 			setTimeout(() => setBidSuccess(false), 3000);
 		} catch (e) {
 			setBidError(getErrorMessage(e));
@@ -226,6 +227,12 @@ export default function AuctionDetailPage({
 	// Selection is kept by id, so it survives a reload (image URLs are re-signed each time)
 	const images = auction.images ?? [];
 	const selectedImage = images.find((image) => image.id === selectedImageId) ?? images[0] ?? null;
+	const selectedIndex = Math.max(0, images.findIndex((image) => image.id === selectedImage?.id));
+	const selectImage = (index: number) => {
+		if (images.length === 0) return;
+		const nextIndex = (index + images.length) % images.length;
+		setSelectedImageId(images[nextIndex].id);
+	};
 
 	const quickAmounts = [
 		auction.currentPrice + auction.minIncrement,
@@ -272,9 +279,14 @@ export default function AuctionDetailPage({
 
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
 				<div className="lg:col-span-3">
-					<Card className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-md">
-						<div className="aspect-4/3 bg-slate-100">
-							<AuctionThumb src={selectedImage?.url ?? null} alt={auction.title} />
+					<Card className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-md dark:border-white/10 dark:bg-slate-900">
+						<div className="relative h-[360px] bg-slate-100 sm:h-[460px] lg:h-[520px] dark:bg-slate-950">
+							<AuctionThumb src={selectedImage?.url ?? null} alt={auction.title} className="object-contain p-4 sm:p-8" />
+							{images.length > 1 && <>
+								<button type="button" onClick={() => selectImage(selectedIndex - 1)} aria-label="Previous photo" className="absolute left-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-slate-950/65 text-white shadow-lg backdrop-blur transition hover:bg-slate-950/90"><ChevronLeft className="h-5 w-5" /></button>
+								<button type="button" onClick={() => selectImage(selectedIndex + 1)} aria-label="Next photo" className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-slate-950/65 text-white shadow-lg backdrop-blur transition hover:bg-slate-950/90"><ChevronRight className="h-5 w-5" /></button>
+								<span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/65 px-3 py-1 text-xs font-medium text-white">{selectedIndex + 1} / {images.length}</span>
+							</>}
 						</div>
 						{images.length > 1 && (
 							<div className="flex gap-2 overflow-x-auto px-3 pb-3">
@@ -300,14 +312,14 @@ export default function AuctionDetailPage({
 						)}
 					</Card>
 
-					<Card className="mt-6 rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+					<Card className="mt-6 rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
 						<CardHeader className="pb-3">
-							<CardTitle className="text-xl font-semibold text-slate-900">
+							<CardTitle className="text-xl font-semibold text-slate-900 dark:text-white">
 								Description
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="pt-0">
-							<p className="whitespace-pre-wrap leading-relaxed text-slate-600">
+							<p className="whitespace-pre-wrap leading-relaxed text-slate-600 dark:text-slate-300">
 								{auction.description || "No description provided"}
 							</p>
 						</CardContent>
@@ -315,7 +327,7 @@ export default function AuctionDetailPage({
 				</div>
 
 				<div className="space-y-4 lg:col-span-2">
-					<div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+					<div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-900">
 						<Link
 							href={`/auctions?category=${encodeURIComponent(auction.category.slug)}`}
 							className={cn(badgeVariants({ variant: "outline" }), "mb-2")}
@@ -323,7 +335,7 @@ export default function AuctionDetailPage({
 							{auction.category.name}
 						</Link>
 						<div className="mb-2 flex items-start justify-between gap-3">
-							<h1 className="text-2xl font-bold tracking-tight text-slate-900">
+							<h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
 								{auction.title}
 							</h1>
 							{isActive && (
@@ -349,10 +361,10 @@ export default function AuctionDetailPage({
 						</div>
 					</div>
 
-					<Card className="border border-slate-200/80 bg-gradient-to-br from-slate-50 to-blue-50/40 shadow-sm">
+					<Card className="border border-slate-200/80 bg-gradient-to-br from-slate-50 to-blue-50/40 shadow-sm dark:border-white/10 dark:from-slate-900 dark:to-slate-800">
 						<CardContent className="space-y-4 p-6">
 							<div className="flex items-center justify-between gap-3">
-								<p className="text-sm font-medium uppercase tracking-[0.14em] text-slate-500">
+								<p className="text-sm font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
 									{isEnded ? "Winning bid" : "Current bid"}
 								</p>
 								{isActive && (
@@ -376,7 +388,7 @@ export default function AuctionDetailPage({
 									</span>
 								) : (
 									<span className="inline-flex items-center gap-1.5">
-										<Clock className="h-4 w-4 text-slate-500" />
+										<Clock className="h-4 w-4 text-slate-500 dark:text-slate-300" />
 										{isActive
 											? timeRemaining(auction.endTime)
 											: isDraft
@@ -385,7 +397,7 @@ export default function AuctionDetailPage({
 									</span>
 								)}
 								<span className="inline-flex items-center gap-1.5">
-									<Trophy className="h-4 w-4 text-slate-500" />
+									<Trophy className="h-4 w-4 text-slate-500 dark:text-slate-300" />
 									{auction.totalBids} total bids
 								</span>
 							</div>
@@ -419,7 +431,7 @@ export default function AuctionDetailPage({
 
 					{/* Not open yet: no bid form until startTime (refresh once it has started) */}
 					{isUpcomingActive && (
-						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
 							<CardContent className="flex items-start gap-3 pt-6">
 								<CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
 								<div>
@@ -433,9 +445,9 @@ export default function AuctionDetailPage({
 					)}
 
 					{isActive && (
-						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+						<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
 							<CardHeader className="pb-3">
-								<CardTitle className="text-base font-semibold text-slate-900">
+								<CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
 									Place Your Bid
 								</CardTitle>
 								<p className="text-sm text-slate-500">Minimum: {formatCurrency(minBid)}</p>
@@ -462,7 +474,7 @@ export default function AuctionDetailPage({
 													key={i}
 													variant="outline"
 													size="sm"
-													className="rounded-xl border-slate-200 bg-white font-semibold text-slate-700 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+													className="rounded-xl border-slate-200 bg-white font-semibold text-slate-700 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
 													onClick={() => setBidAmount(String(amount))}
 												>
 													{formatCurrency(amount)}
@@ -480,7 +492,7 @@ export default function AuctionDetailPage({
 												value={bidAmount}
 												onChange={(e) => setBidAmount(e.target.value)}
 												min={minBid}
-												className="rounded-xl border-slate-200 bg-slate-50 pl-7 text-slate-900 shadow-sm focus-visible:ring-blue-500"
+												className="rounded-xl border-slate-200 bg-slate-50 pl-7 text-slate-900 shadow-sm focus-visible:ring-blue-500 dark:border-white/15 dark:bg-white/5 dark:text-white"
 											/>
 										</div>
 
@@ -490,11 +502,13 @@ export default function AuctionDetailPage({
 											</div>
 										)}
 
-										{bidSuccess && (
-											<div className="rounded-lg border border-green-200 bg-green-50 p-2 text-sm text-green-700">
-												Bid placed successfully!
-											</div>
-										)}
+										<div className="h-9">
+											{bidSuccess && (
+												<div className="rounded-lg border border-green-200 bg-green-50 p-2 text-sm text-green-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300">
+													Bid placed successfully!
+												</div>
+											)}
+										</div>
 
 										<Button
 											className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:bg-blue-700 active:scale-[0.98]"
@@ -520,9 +534,9 @@ export default function AuctionDetailPage({
 						</Card>
 					)}
 
-					<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+					<Card className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">
 						<CardHeader className="pb-3">
-							<CardTitle className="flex items-center justify-between text-base font-semibold text-slate-900">
+								<CardTitle className="flex items-center justify-between text-base font-semibold text-slate-900 dark:text-white">
 								<span>Bid History ({bids.length})</span>
 								<span
 									className={`inline-flex items-center gap-1 text-xs font-medium ${isConnected ? "text-emerald-600" : "text-slate-400"}`}
@@ -538,23 +552,23 @@ export default function AuctionDetailPage({
 									No bids yet — be the first!
 								</p>
 							) : (
-								<div className="max-h-[250px] space-y-0 divide-y divide-slate-100 overflow-y-auto pr-1">
+								<div className="max-h-[250px] space-y-0 divide-y divide-slate-100 dark:divide-white/10 overflow-y-auto pr-1">
 									{bids.map((bid, i) => (
 										<div
 											key={bid.id}
 											className={`flex items-center justify-between gap-3 p-3 ${bid.bidderUsername === user?.username
-													? "bg-blue-50/50"
+														? "bg-blue-50/50 dark:bg-blue-400/10"
 													: i % 2 === 0
-														? "bg-slate-50/50"
-														: "bg-white"
+															? "bg-slate-50/50 dark:bg-white/[0.03]"
+														: "bg-white dark:bg-white/[0.03]"
 												}`}
 										>
 											<div className="flex items-center gap-2.5">
-												<div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+												<div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100">
 													{bid.bidderUsername[0].toUpperCase()}
 												</div>
 												<div>
-													<p className="text-sm font-medium text-slate-700">
+													<p className="text-sm font-medium text-slate-700 dark:text-slate-100">
 														@{bid.bidderUsername}
 														{bid.bidderUsername === user?.username && (
 															<span className="ml-1 text-xs font-semibold text-blue-600">(you)</span>
@@ -565,7 +579,7 @@ export default function AuctionDetailPage({
 													</p>
 												</div>
 											</div>
-											<p className="text-sm font-semibold text-slate-900">
+											<p className="text-sm font-semibold text-slate-900 dark:text-white">
 												{formatCurrency(bid.bidAmount)}
 											</p>
 										</div>

@@ -238,7 +238,7 @@ function MyAuctionRow({
 				</div>
 
 				<div className="flex shrink-0 gap-2">
-					<Link href={`/auctions/${auction.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+					<Link href={`/auctions/${auction.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10")}> 
 						<Eye />
 						View
 					</Link>
